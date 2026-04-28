@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Device' if device else 'Register Device' }} — Xiaozhi Server{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <a href="{{ url_for('devices.list_devices') }}" class="btn btn-sm btn-outline-secondary me-3">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h2 class="fw-bold mb-0">
+    <i class="bi bi-hdd-network me-2 text-success"></i>{{ 'Edit Device' if device else 'Register Device' }}
+  </h2>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card border-0 bg-dark-subtle">
+      <div class="card-body p-4">
+        <form method="POST">
+          <div class="mb-3">
+            <label class="form-label">MAC Address *</label>
+            {% if device %}
+            <input type="text" class="form-control font-monospace" value="{{ device.mac_address }}" disabled>
+            <input type="hidden" name="mac_address" value="{{ device.mac_address }}">
+            {% else %}
+            <input type="text" name="mac_address" class="form-control font-monospace"
+                   placeholder="AA:BB:CC:DD:EE:FF" required pattern="([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}">
+            <div class="form-text">Found on the ESP32 OTA page or device boot logs.</div>
+            {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Display Name <small class="text-muted">(optional)</small></label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ device.name if device else '' }}" placeholder="e.g. Living Room Device">
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label">Assigned Agent</label>
+            <select name="agent_id" class="form-select">
+              <option value="">— Use default agent —</option>
+              {% for agent in agents %}
+              <option value="{{ agent.id }}"
+                {% if device and device.agent_id == agent.id %}selected{% endif %}>
+                {{ agent.name }}{% if agent.is_default %} (default){% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <div class="form-text">If unassigned, the device uses the default agent.</div>
+          </div>
+
+          <div class="d-flex gap-2 justify-content-end">
+            <a href="{{ url_for('devices.list_devices') }}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-success">
+              <i class="bi bi-check2 me-1"></i>{{ 'Save Changes' if device else 'Register' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

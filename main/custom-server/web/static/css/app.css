@@ -1,0 +1,68 @@
+/* custom-server UI styles */
+
+body {
+  min-height: 100vh;
+  background-color: #0d1117;
+}
+
+.navbar {
+  box-shadow: 0 1px 0 rgba(255,255,255,.05);
+}
+
+.card {
+  border-radius: 0.75rem;
+}
+
+.bg-dark-subtle {
+  background-color: #161b22 !important;
+}
+
+.table-dark {
+  --bs-table-bg: transparent;
+}
+
+.font-monospace {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.875em;
+}
+
+/* Make text areas with JSON easier to read */
+textarea.font-monospace {
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+/* Nav active indicator */
+.navbar .nav-link.active {
+  color: #fff !important;
+  position: relative;
+}
+.navbar .nav-link.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0.5rem;
+  right: 0.5rem;
+  height: 2px;
+  background: var(--bs-primary);
+  border-radius: 2px;
+}
+
+/* Stat cards */
+.rounded-circle {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Scrollable chat list */
+.list-group-item {
+  border-color: rgba(255,255,255,.05) !important;
+}
+
+/* Compact badges */
+.badge {
+  font-weight: 500;
+}

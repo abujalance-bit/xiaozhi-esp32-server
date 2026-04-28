@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xiaozhi Custom Server — Test Client</title>
+    <style>
+        :root {
+            --bg:        #0d1117;
+            --surface:   #161b22;
+            --border:    #30363d;
+            --accent:    #388bfd;
+            --text:      #c9d1d9;
+            --text-dim:  #8b949e;
+            --green:     #3fb950;
+            --blue:      #79c0ff;
+            --orange:    #d29922;
+            --red:       #f85149;
+            --purple:    #d2a8ff;
+            --gray:      #484f58;
+            --radius:    6px;
+            --mono:      'Consolas', 'Courier New', monospace;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 16px;
+            gap: 12px;
+        }
+
+        header {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+        }
+
+        header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        header span {
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .app {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* ── Card ── */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .9px;
+            color: var(--text-dim);
+            margin-bottom: 10px;
+        }
+
+        /* ── Form ── */
+        .row   { display: flex; gap: 8px; align-items: flex-end; }
+        .col   { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+        label  { font-size: 11px; color: var(--text-dim); }
+
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text);
+            padding: 6px 9px;
+            font-size: 12px;
+            font-family: var(--mono);
+            outline: none;
+        }
+        input:focus { border-color: var(--accent); }
+        input:disabled { opacity: .45; cursor: not-allowed; }
+
+        /* ── Buttons ── */
+        button {
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 6px 14px;
+            white-space: nowrap;
+            transition: filter .1s;
+            line-height: 1.5;
+        }
+        button:disabled { opacity: .38; cursor: not-allowed; }
+        button:not(:disabled):active { filter: brightness(.85); }
+
+        .btn-primary   { background: #1f6feb; color: #fff; }
+        .btn-primary:not(:disabled):hover   { background: #388bfd; }
+
+        .btn-danger    { background: #6e1a1a; color: #fff; }
+        .btn-danger:not(:disabled):hover    { background: #8b2222; }
+
+        .btn-ghost     { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
+        .btn-ghost:not(:disabled):hover     { border-color: var(--accent); color: var(--text); }
+
+        .btn-record    { background: #1a4731; color: #3fb950; border: 1px solid #1a4731; }
+        .btn-record:not(:disabled):hover    { background: #1e5937; }
+        .btn-record.recording { background: #6e1a1a; color: #f85149; border-color: #6e1a1a;
+                                animation: pulse 1s ease-in-out infinite; }
+
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+
+        /* ── Status dot ── */
+        .status-row { display: flex; align-items: center; gap: 7px; margin-top: 10px; }
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--gray);
+            flex-shrink: 0;
+        }
+        .dot.connected  { background: var(--green); }
+        .dot.connecting { background: var(--orange); animation: pulse .7s ease-in-out infinite; }
+        .dot.error      { background: var(--red); }
+
+        #statusText    { font-size: 12px; color: var(--text-dim); }
+        #sessionBadge  { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+        #playingBadge  {
+            display: none;
+            font-size: 11px;
+            color: var(--purple);
+            background: rgba(210,168,255,.08);
+            border-radius: 4px;
+            padding: 2px 7px;
+            margin-left: auto;
+        }
+
+        /* ── Token toggle ── */
+        #tokenToggleBtn {
+            background: none; border: none; padding: 0;
+            font-size: 11px; color: var(--text-dim);
+            text-decoration: underline dotted;
+            cursor: pointer; margin-top: 6px;
+        }
+        #tokenToggleBtn:hover { color: var(--text); }
+        #tokenRow { display: none; margin-top: 8px; }
+
+        /* ── Log ── */
+        .log-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .log-header-right { display: flex; align-items: center; gap: 8px; }
+
+        .autoscroll-label {
+            display: flex; align-items: center; gap: 5px;
+            font-size: 11px; color: var(--text-dim); cursor: pointer;
+            user-select: none;
+        }
+
+        #log {
+            font-family: var(--mono);
+            font-size: 11.5px;
+            height: 340px;
+            overflow-y: auto;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .le {
+            display: flex;
+            gap: 7px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            line-height: 1.55;
+        }
+        .le:hover { background: rgba(255,255,255,.03); }
+        .le-ts  { color: var(--text-dim); flex-shrink: 0; font-size: 10.5px; min-width: 58px; }
+        .le-dir { flex-shrink: 0; font-weight: 700; font-size: 10.5px; min-width: 42px; }
+        .le-body { flex: 1; word-break: break-all; }
+
+        .le.sent   .le-dir  { color: var(--blue); }
+        .le.sent   .le-body { color: #79c0ff; }
+        .le.recv   .le-dir  { color: var(--green); }
+        .le.recv   .le-body { color: #a5d6a7; }
+        .le.audio  .le-dir  { color: var(--gray); }
+        .le.audio  .le-body { color: var(--gray); }
+        .le.info   .le-dir  { color: var(--orange); }
+        .le.info   .le-body { color: #ffe082; }
+        .le.error  .le-dir  { color: var(--red); }
+        .le.error  .le-body { color: #ff8a80; }
+
+        .stt-highlight { color: #fff; font-weight: 600; }
+        .tts-text-inline { color: var(--purple); }
+
+        /* ── Input ── */
+        .input-row { display: flex; gap: 8px; }
+        .input-row input { flex: 1; }
+
+        .mic-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        /* ── Warning banner ── */
+        .banner {
+            font-size: 12px;
+            padding: 7px 11px;
+            border-radius: var(--radius);
+            margin-top: 8px;
+        }
+        .banner.warn {
+            color: #ffe082;
+            background: rgba(210,153,34,.1);
+            border: 1px solid rgba(210,153,34,.3);
+        }
+        .banner.info-banner {
+            color: #79c0ff;
+            background: rgba(121,192,255,.07);
+            border: 1px solid rgba(121,192,255,.2);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Xiaozhi Custom Server — ESP32 Test Client</h1>
+    <span>Emulates the xiaozhi firmware WebSocket protocol</span>
+</header>
+
+<div class="app">
+
+    <!-- ── Connection ───────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-title">Connection</div>
+
+        <div class="row">
+            <div class="col" style="flex:2">
+                <label for="serverUrl">WebSocket Server URL</label>
+                <input type="text" id="serverUrl"
+                       value="ws://localhost:8000/xiaozhi/v1/"
+                       placeholder="ws://host:8000/xiaozhi/v1/">
+            </div>
+            <div class="col">
+                <label for="deviceId">Device ID (MAC)</label>
+                <div style="display:flex;gap:5px">
+                    <input type="text" id="deviceId" placeholder="AA:BB:CC:DD:EE:FF">
+                    <button class="btn-ghost" id="regenBtn" style="padding:6px 9px"
+                            title="Generate new random Device ID">↺</button>
+                </div>
+            </div>
+        </div>
+
+        <button id="tokenToggleBtn">+ Auth token (optional)</button>
+        <div id="tokenRow">
+            <div class="col">
+                <label for="tokenInput">Bearer Token</label>
+                <input type="password" id="tokenInput"
+                       placeholder="Leave empty when server.auth.enabled = false (default)">
+            </div>
+        </div>
+
+        <div class="status-row">
+            <button class="btn-primary" id="connectBtn">Connect</button>
+            <div class="dot" id="statusDot"></div>
+            <span id="statusText">Disconnected</span>
+            <span id="sessionBadge"></span>
+            <span id="playingBadge">🔊 Playing…</span>
+        </div>
+    </div>
+
+    <!-- ── Message Log ──────────────────────────────────────────── -->
+    <div class="card">
+        <div class="log-header">
+            <div class="card-title" style="margin-bottom:0">Message Log</div>
+            <div class="log-header-right">
+                <label class="autoscroll-label">
+                    <input type="checkbox" id="autoscroll" checked>
+                    Auto-scroll
+                </label>
+                <button class="btn-ghost" id="clearBtn" style="padding:4px 10px;font-size:11px">Clear</button>
+            </div>
+        </div>
+        <div id="log"></div>
+    </div>
+
+    <!-- ── Input ────────────────────────────────────────────────── -->
+    <div class="card">
+        <div class="card-title">Send</div>
+
+        <div class="input-row">
+            <input type="text" id="textInput"
+                   placeholder="Type a message and press Enter (uses listen/detect — no audio needed)…"
+                   disabled>
+            <button class="btn-primary" id="sendBtn" disabled>Send</button>
+        </div>
+
+        <div class="mic-row">
+            <button class="btn-record" id="micBtn" disabled>🎤 Record</button>
+            <button class="btn-danger"  id="abortBtn" disabled>✕ Abort TTS</button>
+        </div>
+
+        <div id="webcodecsInfo" class="banner info-banner">
+            ℹ Audio recording and TTS playback use the WebCodecs API (Chrome 94+ / Edge 94+).
+            Text input via Send works on all browsers.
+        </div>
+        <div id="webcodecsWarn" class="banner warn" style="display:none">
+            ⚠ WebCodecs API not available — audio recording and TTS playback require Chrome 94+
+            or Edge 94+. Text input (Send button) works on all browsers.
+        </div>
+    </div>
+
+    <!-- ── How to serve ─────────────────────────────────────────── -->
+    <div style="font-size:11px;color:var(--text-dim);text-align:center;padding-bottom:8px">
+        Serve with:
+        <code style="font-family:var(--mono);color:var(--text)">
+            cd main/custom-server &amp;&amp; python -m http.server 8080
+        </code>
+        → open <code style="font-family:var(--mono);color:var(--text)">http://localhost:8080/test.html</code>
+    </div>
+
+</div>
+
+<script>
+'use strict';
+
+// ─── Feature detection ────────────────────────────────────────────────────────
+const hasWebCodecs = typeof AudioDecoder !== 'undefined'
+                  && typeof AudioEncoder !== 'undefined'
+                  && typeof AudioData    !== 'undefined'
+                  && typeof EncodedAudioChunk !== 'undefined';
+
+if (!hasWebCodecs) {
+    document.getElementById('webcodecsWarn').style.display = 'block';
+} else {
+    document.getElementById('webcodecsInfo').style.display = 'block';
+}
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let ws            = null;
+let sessionId     = null;
+
+// TTS decode
+let audioCtx      = null;
+let audioDecoder  = null;
+let nextPlayTime  = 0;
+let audioTs       = 0;       // decoder timestamp cursor (microseconds)
+
+// Mic encode
+let micStream     = null;
+let micCtx        = null;
+let micProcessor  = null;
+let audioEncoder  = null;
+let isRecording   = false;
+let encTs         = 0;       // encoder timestamp cursor (microseconds)
+let firstFrame    = false;   // whether listen/start has been sent for this recording
+
+// ─── DOM ──────────────────────────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const serverUrlInput = $('serverUrl');
+const deviceIdInput  = $('deviceId');
+const tokenInput     = $('tokenInput');
+const connectBtn     = $('connectBtn');
+const statusDot      = $('statusDot');
+const statusText     = $('statusText');
+const sessionBadge   = $('sessionBadge');
+const playingBadge   = $('playingBadge');
+const logEl          = $('log');
+const autoscrollCb   = $('autoscroll');
+const clearBtn       = $('clearBtn');
+const textInput      = $('textInput');
+const sendBtn        = $('sendBtn');
+const micBtn         = $('micBtn');
+const abortBtn       = $('abortBtn');
+const regenBtn       = $('regenBtn');
+
+// ─── Device ID persistence ────────────────────────────────────────────────────
+function randMac() {
+    return Array.from({length: 6}, () =>
+        Math.floor(Math.random() * 256).toString(16).toUpperCase().padStart(2, '0')
+    ).join(':');
+}
+
+function loadDeviceId() {
+    let id = localStorage.getItem('xiaozhi_test_device_id');
+    if (!id) { id = randMac(); localStorage.setItem('xiaozhi_test_device_id', id); }
+    deviceIdInput.value = id;
+}
+
+loadDeviceId();
+
+regenBtn.addEventListener('click', () => {
+    const id = randMac();
+    localStorage.setItem('xiaozhi_test_device_id', id);
+    deviceIdInput.value = id;
+    logInfo('Device ID regenerated — reconnect to register the new ID with the server');
+});
+
+// ─── Token panel toggle ───────────────────────────────────────────────────────
+$('tokenToggleBtn').addEventListener('click', function () {
+    const row = $('tokenRow');
+    const open = row.style.display !== 'none';
+    row.style.display = open ? 'none' : 'block';
+    this.textContent  = open ? '+ Auth token (optional)' : '− Auth token (optional)';
+});
+
+// ─── Log ──────────────────────────────────────────────────────────────────────
+function ts() {
+    return new Date().toTimeString().slice(0, 8);
+}
+
+function esc(s) {
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function addLog(kind, dirLabel, body) {
+    const el = document.createElement('div');
+    el.className = `le ${kind}`;
+    el.innerHTML =
+        `<span class="le-ts">${ts()}</span>` +
+        `<span class="le-dir">${dirLabel}</span>` +
+        `<span class="le-body">${body}</span>`;
+    logEl.appendChild(el);
+    if (autoscrollCb.checked) logEl.scrollTop = logEl.scrollHeight;
+}
+
+function logSent(text)  { addLog('sent',  '→ sent', esc(text)); }
+function logRecv(html)  { addLog('recv',  '← recv', html); }
+function logAudio(n)    { addLog('audio', '← recv', `🔊 Opus frame ${n} B`); }
+function logInfo(text)  { addLog('info',  'ℹ info',  esc(text)); }
+function logError(text) { addLog('error', '✖ error', esc(text)); }
+
+clearBtn.addEventListener('click', () => { logEl.innerHTML = ''; });
+
+// ─── Connection ───────────────────────────────────────────────────────────────
+function setStatus(state, label, sid) {
+    statusDot.className  = 'dot ' + (state || '');
+    statusText.textContent = label;
+    sessionBadge.textContent = sid ? `session: ${sid.slice(0,8)}…` : '';
+}
+
+connectBtn.addEventListener('click', () => {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        ws.close();
+    } else {
+        connect();
+    }
+});
+
+function connect() {
+    let base = serverUrlInput.value.trim();
+    if (!base.startsWith('ws://') && !base.startsWith('wss://')) {
+        base = 'ws://' + base;
+        serverUrlInput.value = base;
+    }
+
+    // Browser WebSocket cannot set custom headers — use URL query params instead.
+    // The server reads these and copies them into request headers.
+    const url = new URL(base);
+    const deviceId = deviceIdInput.value.trim() || randMac();
+    url.searchParams.set('device-id', deviceId);
+    url.searchParams.set('client-id', 'web-test-client');
+    const token = tokenInput.value.trim();
+    if (token) url.searchParams.set('authorization', token);
+
+    setStatus('connecting', 'Connecting…', null);
+    connectBtn.textContent = 'Disconnect';
+    logInfo(`Connecting to ${esc(url.hostname)}:${url.port || '80'} as ${deviceId}`);
+
+    ws = new WebSocket(url.toString());
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+        setStatus('connecting', 'Handshaking…', null);
+        const hello = {
+            type: 'hello',
+            audio_params: { format: 'opus', sample_rate: 24000, channels: 1, frame_duration: 60 }
+        };
+        ws.send(JSON.stringify(hello));
+        logSent(JSON.stringify(hello));
+    };
+
+    ws.onmessage = onMessage;
+
+    ws.onclose = ev => {
+        setStatus('', 'Disconnected', null);
+        connectBtn.textContent = 'Connect';
+        sessionId = null;
+        setInputsEnabled(false);
+        playingBadge.style.display = 'none';
+        if (isRecording) stopRecording();
+        teardownDecoder();
+        logInfo(`Connection closed (code ${ev.code}${ev.reason ? ': ' + esc(ev.reason) : ''})`);
+    };
+
+    ws.onerror = () => {
+        setStatus('error', 'Error', null);
+        logError('WebSocket error — check server address and that the server is running');
+    };
+}
+
+// ─── Message dispatch ─────────────────────────────────────────────────────────
+async function onMessage(event) {
+    // Binary → TTS audio frame
+    if (event.data instanceof ArrayBuffer) {
+        logAudio(event.data.byteLength);
+        feedDecoder(event.data);
+        return;
+    }
+
+    let msg;
+    try { msg = JSON.parse(event.data); }
+    catch { logRecv(esc(event.data)); return; }
+
+    switch (msg.type) {
+        case 'hello': {
+            sessionId = msg.session_id || '';
+            setStatus('connected', 'Connected', sessionId);
+            connectBtn.textContent = 'Disconnect';
+            setInputsEnabled(true);
+            setupDecoder();
+            logRecv(`hello — session_id: <b>${esc(sessionId)}</b>`);
+            break;
+        }
+        case 'stt': {
+            logRecv(`🗣 STT: <span class="stt-highlight">${esc(msg.text || '')}</span>`);
+            break;
+        }
+        case 'tts': {
+            if (msg.state === 'sentence_start') {
+                const excerpt = msg.text
+                    ? ` — "<span class="tts-text-inline">${esc(msg.text)}</span>"`
+                    : '';
+                logRecv(`tts sentence_start${excerpt}`);
+                playingBadge.style.display = 'inline';
+                abortBtn.disabled = false;
+            } else if (msg.state === 'stop') {
+                logRecv('tts stop');
+                playingBadge.style.display = 'none';
+            } else {
+                logRecv(esc(JSON.stringify(msg)));
+            }
+            break;
+        }
+        case 'pong':
+            // heartbeat — no log entry to avoid noise
+            break;
+        default:
+            logRecv(esc(JSON.stringify(msg)));
+    }
+}
+
+// ─── TTS decode (Opus → PCM → AudioContext) ───────────────────────────────────
+function setupDecoder() {
+    if (!hasWebCodecs) return;
+    teardownDecoder();
+
+    audioCtx = new AudioContext({ sampleRate: 24000 });
+    nextPlayTime = 0;
+    audioTs = 0;
+
+    audioDecoder = new AudioDecoder({
+        output(audioData) {
+            if (!audioCtx) { audioData.close(); return; }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const nFrames = audioData.numberOfFrames;
+            const nCh     = audioData.numberOfChannels;
+            const buf = audioCtx.createBuffer(nCh, nFrames, audioData.sampleRate);
+            for (let ch = 0; ch < nCh; ch++) {
+                audioData.copyTo(buf.getChannelData(ch), { planeIndex: ch });
+            }
+            audioData.close();
+
+            const src = audioCtx.createBufferSource();
+            src.buffer = buf;
+            src.connect(audioCtx.destination);
+
+            // Schedule gaplessly after the previous frame, with a small padding
+            const startAt = Math.max(audioCtx.currentTime + 0.02, nextPlayTime);
+            src.start(startAt);
+            nextPlayTime = startAt + buf.duration;
+        },
+        error(e) { logError('AudioDecoder: ' + esc(e.message)); }
+    });
+
+    audioDecoder.configure({
+        codec: 'opus',
+        sampleRate: 24000,
+        numberOfChannels: 1,
+    });
+}
+
+function feedDecoder(buffer) {
+    if (!audioDecoder || audioDecoder.state === 'closed') return;
+    try {
+        audioDecoder.decode(new EncodedAudioChunk({
+            type: 'key',  // all Opus frames are key frames
+            timestamp: audioTs,
+            duration: 60_000,  // 60 ms in microseconds
+            data: buffer,
+        }));
+        audioTs += 60_000;
+    } catch (e) {
+        logError('Decode error: ' + esc(e.message));
+    }
+}
+
+function resetDecoder() {
+    if (!audioDecoder || audioDecoder.state === 'closed') return;
+    audioDecoder.reset();
+    audioDecoder.configure({ codec: 'opus', sampleRate: 24000, numberOfChannels: 1 });
+    nextPlayTime = 0;
+    audioTs = 0;
+}
+
+function teardownDecoder() {
+    if (audioDecoder && audioDecoder.state !== 'closed') audioDecoder.close();
+    if (audioCtx) audioCtx.close();
+    audioDecoder = null;
+    audioCtx = null;
+    nextPlayTime = 0;
+    audioTs = 0;
+}
+
+// ─── Mic encode (PCM → Opus → binary WS frames) ───────────────────────────────
+micBtn.addEventListener('click', () => {
+    if (isRecording) stopRecording();
+    else             startRecording();
+});
+
+async function startRecording() {
+    if (!hasWebCodecs) {
+        logError('WebCodecs not available — use Chrome 94+ or Edge 94+ for audio recording');
+        return;
+    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        logError('Not connected — connect first');
+        return;
+    }
+
+    try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+            audio: { sampleRate: 24000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+        });
+    } catch (e) {
+        logError('Microphone access denied: ' + esc(e.message));
+        return;
+    }
+
+    micCtx = new AudioContext({ sampleRate: 24000 });
+    const source = micCtx.createMediaStreamSource(micStream);
+
+    // ScriptProcessor: 1440 samples @ 24 kHz = exactly 60 ms = frame_duration
+    // (deprecated but works everywhere; AudioWorklet would need an extra JS file)
+    micProcessor = micCtx.createScriptProcessor(1440, 1, 1);
+
+    encTs = 0;
+    firstFrame = false;
+
+    audioEncoder = new AudioEncoder({
+        output(chunk) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            if (!firstFrame) {
+                // Tell server to begin VAD+ASR pipeline for this utterance
+                wsSend({ type: 'listen', state: 'start', mode: 'auto' });
+                firstFrame = true;
+            }
+            const buf = new ArrayBuffer(chunk.byteLength);
+            chunk.copyTo(buf);
+            ws.send(buf);
+        },
+        error(e) { logError('AudioEncoder: ' + esc(e.message)); }
+    });
+
+    audioEncoder.configure({ codec: 'opus', sampleRate: 24000, numberOfChannels: 1, bitrate: 32_000 });
+
+    micProcessor.onaudioprocess = ev => {
+        if (!isRecording || !audioEncoder || audioEncoder.state === 'closed') return;
+        const samples = new Float32Array(ev.inputBuffer.getChannelData(0));
+        const ad = new AudioData({
+            format: 'f32',
+            sampleRate: 24000,
+            numberOfFrames: samples.length,
+            numberOfChannels: 1,
+            timestamp: encTs,
+            data: samples,
+        });
+        audioEncoder.encode(ad);
+        ad.close();
+        encTs += Math.round(samples.length * (1_000_000 / 24000));
+    };
+
+    source.connect(micProcessor);
+    micProcessor.connect(micCtx.destination);
+    isRecording = true;
+    micBtn.textContent = '⏹ Stop Recording';
+    micBtn.classList.add('recording');
+    logInfo('Recording started — speak now, then click Stop');
+}
+
+async function stopRecording() {
+    if (!isRecording) return;
+    isRecording = false;
+    micProcessor.disconnect();
+    micStream.getTracks().forEach(t => t.stop());
+    if (audioEncoder && audioEncoder.state !== 'closed') {
+        await audioEncoder.flush();
+        audioEncoder.close();
+    }
+    micCtx.close();
+    micBtn.textContent = '🎤 Record';
+    micBtn.classList.remove('recording');
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        wsSend({ type: 'listen', state: 'stop' });
+    }
+    logInfo('Recording stopped — waiting for server response…');
+}
+
+// ─── Text input ───────────────────────────────────────────────────────────────
+sendBtn.addEventListener('click', sendText);
+textInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) sendText(); });
+
+function sendText() {
+    const text = textInput.value.trim();
+    if (!text) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) { logError('Not connected'); return; }
+    // listen/detect bypasses the audio pipeline entirely — the server treats the
+    // text as if it were already transcribed by the ESP32's on-device ASR.
+    wsSend({ type: 'listen', state: 'detect', text });
+    textInput.value = '';
+}
+
+// ─── Abort ────────────────────────────────────────────────────────────────────
+abortBtn.addEventListener('click', () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    wsSend({ type: 'abort' });
+    resetDecoder();
+    playingBadge.style.display = 'none';
+});
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function wsSend(obj) {
+    const text = JSON.stringify(obj);
+    ws.send(text);
+    logSent(text);
+}
+
+function setInputsEnabled(on) {
+    textInput.disabled = !on;
+    sendBtn.disabled   = !on;
+    micBtn.disabled    = !(on && hasWebCodecs);
+    abortBtn.disabled  = true; // only enabled when TTS is active
+}
+</script>
+
+</body>
+</html>

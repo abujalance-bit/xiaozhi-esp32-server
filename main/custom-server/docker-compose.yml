@@ -1,0 +1,28 @@
+name: xiaozhi-custom
+
+services:
+  custom-server:
+    build:
+      context: ..          # main/ is the build context
+      dockerfile: custom-server/Dockerfile
+    image: xiaozhi-custom-server:latest
+    restart: unless-stopped
+    network_mode: host     # shares the host network — Ollama reachable at localhost:11434,
+                           # and all server ports (5001, 8000, 8003) bind on 0.0.0.0 automatically
+    volumes:
+      - custom-data:/app/data
+      - custom-server-data:/app/server/data
+      - custom-models:/app/server/models
+    environment:
+      # Set to your Jetson's LAN IP — sent to ESP32 devices so they know where to connect
+      SERVER_HOST: ${SERVER_HOST:-localhost}
+      FLASK_PORT: "5001"
+      WS_PORT: "8000"
+      HTTP_PORT: "8003"
+      DATA_DIR: /app/data
+      SERVER_DATA_DIR: /app/server/data
+
+volumes:
+  custom-data:
+  custom-server-data:
+  custom-models:

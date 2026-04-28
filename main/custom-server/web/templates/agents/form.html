@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Agent' if agent else 'New Agent' }} — Xiaozhi Server{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <a href="{{ url_for('agents.list_agents') }}" class="btn btn-sm btn-outline-secondary me-3">
+    <i class="bi bi-arrow-left"></i>
+  </a>
+  <h2 class="fw-bold mb-0">
+    <i class="bi bi-robot me-2 text-primary"></i>{{ 'Edit Agent' if agent else 'New Agent' }}
+  </h2>
+</div>
+
+<form method="POST" x-data="agentForm()">
+  <div class="row g-4">
+
+    <!-- Basic Info -->
+    <div class="col-12">
+      <div class="card border-0 bg-dark-subtle">
+        <div class="card-header border-0 bg-transparent fw-semibold">
+          <i class="bi bi-info-circle me-2"></i>Basic Information
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Agent Name *</label>
+            <input type="text" name="name" class="form-control"
+                   value="{{ agent.name if agent else '' }}" required placeholder="e.g. Home Assistant Bot">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">System Prompt</label>
+            <textarea name="system_prompt" class="form-control font-monospace" rows="6"
+                      placeholder="You are a helpful voice assistant...">{{ agent.system_prompt if agent else '' }}</textarea>
+            <div class="form-text">This is the personality and instructions sent to the LLM before the conversation starts.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Memory Seed <small class="text-muted">(optional)</small></label>
+            <textarea name="summary_memory" class="form-control" rows="3"
+                      placeholder="Key facts about the user...">{{ agent.summary_memory if agent else '' }}</textarea>
+            <div class="form-text">Pre-loaded facts injected into memory at session start.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Providers -->
+    {% set provider_configs = [
+      ('ASR', 'asr_model_id', 'Speech Recognition', 'bi-mic-fill', 'danger'),
+      ('LLM', 'llm_model_id', 'Language Model', 'bi-brain', 'primary'),
+      ('TTS', 'tts_model_id', 'Text-to-Speech', 'bi-volume-up-fill', 'success'),
+      ('VLLM', 'vllm_model_id', 'Vision Model', 'bi-camera-fill', 'info'),
+      ('Memory', 'mem_model_id', 'Memory', 'bi-memory', 'warning'),
+      ('Intent', 'intent_model_id', 'Intent Recognition', 'bi-lightning-fill', 'secondary'),
+      ('VAD', 'vad_model_id', 'Voice Activity Detection', 'bi-soundwave', 'dark'),
+    ] %}
+
+    {% for mtype, field, label, icon, color in provider_configs %}
+    <div class="col-md-6">
+      <div class="card border-0 bg-dark-subtle h-100">
+        <div class="card-header border-0 bg-transparent fw-semibold">
+          <i class="bi {{ icon }} text-{{ color }} me-2"></i>{{ label }}
+        </div>
+        <div class="card-body">
+          <label class="form-label small text-muted">Provider</label>
+          <select name="{{ field }}" class="form-select">
+            {% for mc in models_by_type.get(mtype, []) %}
+            <option value="{{ mc.id }}"
+              {% if agent and agent|attr(field) == mc.id %}selected{% endif %}
+              {% if not agent and mc.id in ('SileroVAD','FunASR','OllamaLLM','OllamaVLLM','PiperTTS','mem_local_short','function_call') %}selected{% endif %}>
+              {{ mc.name }}{% if mc.is_local %} (local){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          {% if mtype == 'TTS' %}
+          <div class="mt-3">
+            <label class="form-label small text-muted">Voice Override <small class="text-muted">(optional)</small></label>
+            <input type="text" name="tts_voice" class="form-control form-control-sm"
+                   value="{{ agent.tts_voice if agent else '' }}"
+                   placeholder="e.g. en_US-lessac-medium or leave blank">
+            <div class="row mt-2 g-2">
+              <div class="col-4">
+                <label class="form-label small text-muted">Volume %</label>
+                <input type="number" name="tts_volume" class="form-control form-control-sm"
+                       min="0" max="200" value="{{ agent.tts_volume if agent else 100 }}">
+              </div>
+              <div class="col-4">
+                <label class="form-label small text-muted">Rate %</label>
+                <input type="number" name="tts_rate" class="form-control form-control-sm"
+                       min="0" max="200" value="{{ agent.tts_rate if agent else 100 }}">
+              </div>
+              <div class="col-4">
+                <label class="form-label small text-muted">Pitch %</label>
+                <input type="number" name="tts_pitch" class="form-control form-control-sm"
+                       min="0" max="200" value="{{ agent.tts_pitch if agent else 100 }}">
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- Advanced -->
+    <div class="col-12">
+      <div class="card border-0 bg-dark-subtle">
+        <div class="card-header border-0 bg-transparent fw-semibold">
+          <i class="bi bi-sliders me-2"></i>Advanced
+        </div>
+        <div class="card-body">
+          <label class="form-label">Chat History Mode</label>
+          <select name="chat_history_conf" class="form-select w-auto">
+            <option value="0" {% if not agent or agent.chat_history_conf == 0 %}selected{% endif %}>Ignore (no logging)</option>
+            <option value="1" {% if agent and agent.chat_history_conf == 1 %}selected{% endif %}>Record text only</option>
+            <option value="2" {% if agent and agent.chat_history_conf == 2 %}selected{% endif %}>Record text + audio</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submit -->
+    <div class="col-12 d-flex gap-2 justify-content-end">
+      <a href="{{ url_for('agents.list_agents') }}" class="btn btn-outline-secondary">Cancel</a>
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check2 me-1"></i>{{ 'Save Changes' if agent else 'Create Agent' }}
+      </button>
+    </div>
+
+  </div>
+</form>
+
+<script>
+function agentForm() {
+  return {};
+}
+</script>
+{% endblock %}
