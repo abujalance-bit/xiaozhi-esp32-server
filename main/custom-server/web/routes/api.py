@@ -165,6 +165,14 @@ def server_base():
     # Ensure server.auth exists
     result.setdefault("server", {}).setdefault("auth", {"enabled": False})
 
+    # logger.py requires a "log" key — not present in sys_params, so inject defaults
+    result.setdefault("log", {
+        "log_level": "INFO",
+        "log_dir": "tmp",
+        "log_file": "server.log",
+        "data_dir": "data",
+    })
+
     return ok(result)
 
 
