@@ -111,6 +111,12 @@ server:
   vision_explain: http://{ws_host}:{http_port}/mcp/vision/explain
   auth:
     enabled: false
+
+log:
+  log_level: INFO
+  log_dir: tmp
+  log_file: server.log
+  data_dir: data
 """
     with open(config_path, "w") as f:
         f.write(content)
