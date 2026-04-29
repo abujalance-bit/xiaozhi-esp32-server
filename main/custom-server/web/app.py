@@ -55,7 +55,7 @@ def create_app():
 
     # Start the xiaozhi-server in a background thread 5 s after Flask binds,
     # so Flask is already serving when the server makes its first manager-api call.
-    autostart_server_background()
+    #autostart_server_background()
 
     return app
 
