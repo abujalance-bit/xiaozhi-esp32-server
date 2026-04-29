@@ -14,6 +14,32 @@ api_bp = Blueprint("api", __name__)
 
 DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
 
+# Keys that xiaozhi-server reads from the top-level config but are not stored in
+# sys_params. These are injected into every /config/server-base response so the
+# server works identically whether launched standalone or via manager-api.
+_STATIC_SERVER_DEFAULTS = {
+    "delete_audio": True,
+    "enable_wakeup_words_response_cache": True,
+    "enable_stop_tts_notify": False,
+    "stop_tts_notify_voice": "config/assets/tts_notify.mp3",
+    "enable_websocket_ping": False,
+    "tts_audio_send_delay": 0,
+    "prompt_template": "agent-base-prompt.txt",
+    # Hard-accessed (no default) — must be present or the server crashes on connect
+    "exit_commands": ["退出", "关闭", "exit", "quit", "bye"],
+    "xiaozhi": {
+        "type": "hello",
+        "version": 1,
+        "transport": "websocket",
+        "audio_params": {
+            "format": "opus",
+            "sample_rate": 24000,
+            "channels": 1,
+            "frame_duration": 60,
+        },
+    },
+}
+
 
 def _get_api_secret():
     secret_file = os.path.join(DATA_DIR, ".api_secret")
@@ -172,6 +198,11 @@ def server_base():
         "log_file": "server.log",
         "data_dir": "data",
     })
+
+    # Inject static defaults for keys the server hard-accesses or needs at startup.
+    # setdefault means sys_params values (already in result) always win.
+    for key, val in _STATIC_SERVER_DEFAULTS.items():
+        result.setdefault(key, val)
 
     return ok(result)
 
