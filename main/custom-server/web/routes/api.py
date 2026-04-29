@@ -152,12 +152,14 @@ def _build_agent_config(agent):
     result["summaryMemory"] = agent.summary_memory or ""
     result["chat_history_conf"] = agent.chat_history_conf or 0
 
-    # Plugins: only include enabled plugins
+    # Plugins: only include enabled plugins.
+    # xiaozhi-server does json.loads() on each value, so params must be a JSON string.
     enabled_plugins = Plugin.query.filter_by(enabled=True).all()
     if enabled_plugins:
+        import json as _json
         plugins_dict = {}
         for p in enabled_plugins:
-            plugins_dict[p.code] = dict(p.params_json) if p.params_json else {}
+            plugins_dict[p.code] = _json.dumps(dict(p.params_json) if p.params_json else {})
         result["plugins"] = plugins_dict
 
     # Device output limit
