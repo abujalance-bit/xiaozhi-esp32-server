@@ -15,6 +15,7 @@ Endpoints (all require login):
 import collections
 import os
 import queue
+import shutil
 import signal
 import subprocess
 import threading
@@ -29,6 +30,10 @@ DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
 SERVER_DATA_DIR = os.environ.get("SERVER_DATA_DIR", "/app/server/data")
 SERVER_DIR = os.path.dirname(SERVER_DATA_DIR)
 PID_FILE = os.path.join(DATA_DIR, ".server.pid")
+
+# Directory containing provider overrides (sibling of the web/ directory)
+_OVERRIDES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                               "server_overrides")
 
 _SIGTERM_TIMEOUT = 10   # seconds before escalating to SIGKILL
 _AUTOSTART_DELAY = 5    # seconds after Flask starts before auto-launching server
@@ -110,8 +115,24 @@ def _start_log_reader(proc: subprocess.Popen):
 
 # ── Core actions ──────────────────────────────────────────────────────────────
 
+def _copy_overrides():
+    """Copy server_overrides/ into the xiaozhi-server directory."""
+    if not os.path.isdir(_OVERRIDES_DIR):
+        return
+    for root, dirs, files in os.walk(_OVERRIDES_DIR):
+        rel = os.path.relpath(root, _OVERRIDES_DIR)
+        dest_dir = os.path.join(SERVER_DIR, rel)
+        os.makedirs(dest_dir, exist_ok=True)
+        for fname in files:
+            src = os.path.join(root, fname)
+            dst = os.path.join(dest_dir, fname)
+            shutil.copy2(src, dst)
+    print(f"[server_ctl] overrides copied from {_OVERRIDES_DIR}", flush=True)
+
+
 def _launch(clear_log: bool = True) -> int:
-    """Write a fresh .config.yaml, spawn the server, start log capture. Returns PID."""
+    """Copy overrides, write a fresh .config.yaml, spawn the server. Returns PID."""
+    _copy_overrides()
     from app import _write_server_config
     _write_server_config()
 
