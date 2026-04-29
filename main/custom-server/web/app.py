@@ -119,4 +119,6 @@ server:
 if __name__ == "__main__":
     app = create_app()
     port = int(os.environ.get("FLASK_PORT", 5001))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    # threaded=True is required for SSE — without it the dev server is single-threaded
+    # and an open /server/logs/stream connection blocks every other request.
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

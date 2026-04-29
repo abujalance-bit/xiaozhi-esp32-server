@@ -5,6 +5,39 @@
   <h2 class="fw-bold mb-0"><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard</h2>
 </div>
 
+<!-- Server control -->
+<div class="card border-0 bg-dark-subtle mb-4"
+     x-data="serverControl()"
+     x-init="poll(); setInterval(poll, 5000)">
+  <div class="card-body d-flex align-items-center gap-3 flex-wrap">
+    <span class="fw-semibold"><i class="bi bi-server me-2"></i>xiaozhi-server</span>
+    <span class="badge fs-6"
+          :class="running === null ? 'bg-secondary' : (running ? 'bg-success' : 'bg-danger')"
+          x-text="running === null ? '…' : (running ? 'Running' : 'Stopped')"></span>
+    <span class="text-muted small" x-show="pid" x-text="'pid ' + pid"></span>
+    <div class="ms-auto d-flex gap-2 flex-wrap">
+      <button class="btn btn-sm btn-success" @click="action('start')"
+              :disabled="running || loading">
+        <i class="bi bi-play-fill me-1"></i>Start
+      </button>
+      <button class="btn btn-sm btn-danger" @click="action('stop')"
+              :disabled="!running || loading">
+        <i class="bi bi-stop-fill me-1"></i>Stop
+      </button>
+      <button class="btn btn-sm btn-warning" @click="action('restart')"
+              :disabled="loading">
+        <i class="bi bi-arrow-clockwise me-1"></i>Restart
+      </button>
+      <a class="btn btn-sm btn-outline-info" href="/server/logs" target="_blank">
+        <i class="bi bi-terminal me-1"></i>View Logs ↗
+      </a>
+    </div>
+  </div>
+  <div class="card-footer border-0 bg-transparent py-1 px-3" x-show="msg">
+    <span class="small" :class="msgOk ? 'text-success' : 'text-danger'" x-text="msg"></span>
+  </div>
+</div>
+
 <!-- Stats cards -->
 <div class="row g-3 mb-4">
   <div class="col-sm-6 col-xl-3">
@@ -138,4 +171,44 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function serverControl() {
+  return {
+    running: null,
+    pid: null,
+    loading: false,
+    msg: '',
+    msgOk: true,
+    async poll() {
+      try {
+        const r = await fetch('/server/status');
+        const d = await r.json();
+        this.running = d.running;
+        this.pid = d.pid;
+      } catch { /* ignore transient errors */ }
+    },
+    async action(cmd) {
+      this.loading = true;
+      this.msg = '';
+      try {
+        const r = await fetch(`/server/${cmd}`, { method: 'POST' });
+        const d = await r.json();
+        this.msgOk = d.ok !== false;
+        this.msg = d.ok !== false
+          ? (cmd === 'stop' ? 'Server stopped.' : `Server started (pid ${d.pid}).`)
+          : (d.error || 'Request failed.');
+        await this.poll();
+      } catch (e) {
+        this.msgOk = false;
+        this.msg = 'Network error: ' + e.message;
+      } finally {
+        this.loading = false;
+      }
+    },
+  };
+}
+</script>
 {% endblock %}
