@@ -35,13 +35,44 @@ DEFAULT_MODEL_CONFIGS = [
         },
     ),
     ModelConfig(
+        id="FasterWhisper",
+        type="ASR",
+        name="Faster Whisper (Local, GPU)",
+        description="Offline Whisper via CTranslate2 — multilingual (including Spanish), CUDA-accelerated. medium ~0.5 s on Jetson.",
+        is_local=True,
+        config_json={
+            "type": "faster_whisper_local",
+            # Download with: pip install faster-whisper, then the model auto-downloads
+            # on first run, or point at a local path: /data/models/faster-whisper-medium
+            "model_size_or_path": "medium",
+            "device": "cuda",
+            "compute_type": "float16",
+            "language": None,
+            "output_dir": "tmp/",
+        },
+    ),
+    ModelConfig(
+        id="GroqASR",
+        type="ASR",
+        name="Groq Whisper (Cloud)",
+        description="Groq-hosted Whisper Large v3 Turbo — very fast, free tier, multilingual including Spanish.",
+        is_local=False,
+        config_json={
+            "type": "openai",
+            "api_key": "",
+            "base_url": "https://api.groq.com/openai/v1/audio/transcriptions",
+            "model_name": "whisper-large-v3-turbo",
+            "output_dir": "tmp/",
+        },
+    ),
+    ModelConfig(
         id="OpenaiASR",
         type="ASR",
         name="OpenAI Whisper (Cloud)",
         description="OpenAI Whisper speech recognition via API.",
         is_local=False,
         config_json={
-            "type": "OpenaiASR",
+            "type": "openai",
             "api_key": "",
             "model_name": "whisper-1",
             "output_dir": "tmp/",

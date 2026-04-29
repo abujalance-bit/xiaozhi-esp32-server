@@ -269,7 +269,7 @@
             <div class="col" style="flex:2">
                 <label for="serverUrl">WebSocket Server URL</label>
                 <input type="text" id="serverUrl"
-                       value="ws://localhost:8000/xiaozhi/v1/"
+                       value="ws://192.168.1.72:8000/xiaozhi/v1/"
                        placeholder="ws://host:8000/xiaozhi/v1/">
             </div>
             <div class="col">
@@ -683,11 +683,14 @@ async function startRecording() {
     }
 
     micCtx = new AudioContext({ sampleRate: 24000 });
+    const actualRate = micCtx.sampleRate;  // browser may not honor 24000; use actual
+    logInfo(`Mic AudioContext sample rate: ${actualRate} Hz`);
     const source = micCtx.createMediaStreamSource(micStream);
 
-    // ScriptProcessor: 1440 samples @ 24 kHz = exactly 60 ms = frame_duration
+    // ScriptProcessor buffer must be a power of 2 (256–16384); 1440 (=60 ms @ 24 kHz)
+    // is not valid. Use 2048 instead — AudioEncoder handles Opus framing internally.
     // (deprecated but works everywhere; AudioWorklet would need an extra JS file)
-    micProcessor = micCtx.createScriptProcessor(1440, 1, 1);
+    micProcessor = micCtx.createScriptProcessor(2048, 1, 1);
 
     encTs = 0;
     firstFrame = false;
@@ -707,14 +710,17 @@ async function startRecording() {
         error(e) { logError('AudioEncoder: ' + esc(e.message)); }
     });
 
-    audioEncoder.configure({ codec: 'opus', sampleRate: 24000, numberOfChannels: 1, bitrate: 32_000 });
+    // Use actual AudioContext rate — browser may not honor the 24000 Hz request.
+    // Mismatch here would cause the Opus encoder to label audio at the wrong rate,
+    // producing corrupted audio on the server side.
+    audioEncoder.configure({ codec: 'opus', sampleRate: actualRate, numberOfChannels: 1, bitrate: 32_000 });
 
     micProcessor.onaudioprocess = ev => {
         if (!isRecording || !audioEncoder || audioEncoder.state === 'closed') return;
         const samples = new Float32Array(ev.inputBuffer.getChannelData(0));
         const ad = new AudioData({
             format: 'f32',
-            sampleRate: 24000,
+            sampleRate: actualRate,
             numberOfFrames: samples.length,
             numberOfChannels: 1,
             timestamp: encTs,
@@ -722,7 +728,7 @@ async function startRecording() {
         });
         audioEncoder.encode(ad);
         ad.close();
-        encTs += Math.round(samples.length * (1_000_000 / 24000));
+        encTs += Math.round(samples.length * (1_000_000 / actualRate));
     };
 
     source.connect(micProcessor);

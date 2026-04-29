@@ -38,6 +38,7 @@ def create_app():
     from routes.plugins import plugins_bp
     from routes.settings import settings_bp
     from routes.api import api_bp
+    from routes.server_control import server_ctl, autostart_server_background
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(dashboard_bp)
@@ -45,11 +46,16 @@ def create_app():
     app.register_blueprint(devices_bp, url_prefix="/devices")
     app.register_blueprint(plugins_bp, url_prefix="/plugins")
     app.register_blueprint(settings_bp, url_prefix="/settings")
-    app.register_blueprint(api_bp)  # /config/* and /agent/* — no prefix
+    app.register_blueprint(api_bp)        # /config/* and /agent/* — no prefix
+    app.register_blueprint(server_ctl)    # /server/*
 
     @app.route("/")
     def index():
         return redirect(url_for("dashboard.index"))
+
+    # Start the xiaozhi-server in a background thread 5 s after Flask binds,
+    # so Flask is already serving when the server makes its first manager-api call.
+    autostart_server_background()
 
     return app
 

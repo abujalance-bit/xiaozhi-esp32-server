@@ -56,6 +56,7 @@ class ASRProvider(ASRProviderBase):
         self.output_dir = config.get("output_dir")
         self.delete_audio_file = delete_audio_file
         device = config.get("device", "cpu")
+        self.language = config.get("language", "auto")
 
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -83,7 +84,7 @@ class ASRProvider(ASRProviderBase):
                     self.model.generate,
                     input=artifacts.pcm_bytes,
                     cache={},
-                    language="auto",
+                    language=self.language,
                     use_itn=True,
                     batch_size_s=60,
                 )
