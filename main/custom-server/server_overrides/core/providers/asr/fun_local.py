@@ -57,17 +57,32 @@ class ASRProvider(ASRProviderBase):
         self.delete_audio_file = delete_audio_file
         device = config.get("device", "cpu")
         self.language = config.get("language", "auto")
+        hub = config.get("hub", "hf")
 
         os.makedirs(self.output_dir, exist_ok=True)
 
-        logger.bind(tag=TAG).info(f"Loading FunASR model from '{self.model_dir}' on {device}")
+        # AutoModel's `model` arg is a registry key, not a file path.
+        # When model_dir is a local filesystem path, use the official HuggingFace
+        # name for registry lookup and pass the path separately as `model_dir`.
+        model_name = config.get("model_name", "iic/SenseVoiceSmall")
+        if self.model_dir and os.path.isdir(self.model_dir):
+            model_kwargs = {"model": model_name, "model_dir": self.model_dir}
+            logger.bind(tag=TAG).info(
+                f"Loading FunASR '{model_name}' from local path '{self.model_dir}' on {device}"
+            )
+        else:
+            model_kwargs = {"model": self.model_dir or model_name}
+            logger.bind(tag=TAG).info(
+                f"Loading FunASR '{model_kwargs['model']}' on {device}"
+            )
+
         with CaptureOutput():
             self.model = AutoModel(
-                model=self.model_dir,
+                **model_kwargs,
                 device=device,
                 vad_kwargs={"max_single_segment_time": 30000},
                 disable_update=True,
-                hub="hf",
+                hub=hub,
             )
 
     async def speech_to_text(

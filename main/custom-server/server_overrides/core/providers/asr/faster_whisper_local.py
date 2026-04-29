@@ -42,7 +42,16 @@ class ASRProvider(ASRProviderBase):
         logger.bind(tag=TAG).info(
             f"Loading faster-whisper '{model_path}' on {device} ({compute_type})"
         )
-        self.model = WhisperModel(model_path, device=device, compute_type=compute_type)
+        try:
+            self.model = WhisperModel(model_path, device=device, compute_type=compute_type)
+        except (ValueError, RuntimeError) as e:
+            if "CUDA" in str(e) or "cuda" in str(e).lower():
+                logger.bind(tag=TAG).warning(
+                    f"CUDA unavailable for faster-whisper ({e}); falling back to CPU+int8"
+                )
+                self.model = WhisperModel(model_path, device="cpu", compute_type="int8")
+            else:
+                raise
         logger.bind(tag=TAG).info("faster-whisper ready")
 
     def requires_file(self) -> bool:

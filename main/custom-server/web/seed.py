@@ -26,10 +26,10 @@ DEFAULT_MODEL_CONFIGS = [
         is_local=True,
         config_json={
             "type": "fun_local",
-            # Model downloaded to /data/models on the Jetson host, bind-mounted read-only.
-            # Verify the exact path: ls /data/models/huggingface/iic/SenseVoiceSmall/
-            # If the model lives elsewhere update this via Settings in the web UI.
-            "model_dir": "/data/models/huggingface/iic/SenseVoiceSmall",
+            # model_name: registered HuggingFace/ModelScope name (used for class lookup)
+            # model_dir:  local path to the model files (skips download if it exists)
+            "model_name": "iic/SenseVoiceSmall",
+            "model_dir": "/data/models/SenseVoiceSmall",
             "output_dir": "tmp/",
             "device": "cuda:0",
         },
@@ -42,11 +42,12 @@ DEFAULT_MODEL_CONFIGS = [
         is_local=True,
         config_json={
             "type": "faster_whisper_local",
-            # Download with: pip install faster-whisper, then the model auto-downloads
-            # on first run, or point at a local path: /data/models/faster-whisper-medium
+            # Auto-downloads on first run, or set to a local path.
+            # On Jetson ARM64 the PyPI ctranslate2 has no CUDA support;
+            # the provider falls back automatically to cpu+int8.
             "model_size_or_path": "medium",
-            "device": "cuda",
-            "compute_type": "float16",
+            "device": "cpu",
+            "compute_type": "int8",
             "language": None,
             "output_dir": "tmp/",
         },
