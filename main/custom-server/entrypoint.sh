@@ -6,7 +6,7 @@ mkdir -p "$DATA_DIR"
 mkdir -p "$SERVER_DATA_DIR"
 mkdir -p /var/log/supervisor
 mkdir -p /app/server/tmp
-mkdir -p /app/server/models/piper
+mkdir -p /app/server/tmp   # piper writes intermediate wav files here
 
 # If SERVER_HOST is still the placeholder, try to auto-detect the container IP
 if [ "$SERVER_HOST" = "localhost" ] || [ -z "$SERVER_HOST" ]; then

@@ -1,9 +1,10 @@
 # Xiaozhi Custom Server
 
 A self-contained, single-container deployment of the Xiaozhi ESP32 voice assistant server
-for the **NVIDIA Jetson AGX Orin (64 GB, ARM64)**. Replaces the original Java backend and
-Vue.js frontend with a lightweight Flask + SQLite stack, and defaults to fully local,
-offline-capable AI services.
+for the **NVIDIA Jetson AGX Orin (ARM64)**. Replaces the original Java backend and Vue.js
+frontend with a lightweight Flask + SQLite stack. All local AI services run on the
+Jetson GPU using [dusty-nv/jetson-containers](https://github.com/dusty-nv/jetson-containers)
+as the base image.
 
 ---
 
@@ -14,8 +15,9 @@ offline-capable AI services.
 | **xiaozhi-server** | WebSocket AI engine (Python) — upstream source, unmodified |
 | **Flask web UI** | Browser-based admin panel replacing the Java manager-api + Vue frontend |
 | **SQLite** | Embedded database — no MySQL or Redis required |
-| **Piper TTS** | Offline text-to-speech, ARM64-native, CPU-only |
-| **Ollama LLM / VLLM** | Local LLM and vision model via your existing Ollama instance |
+| **Piper TTS** | Offline text-to-speech, GPU-accelerated via onnxruntime CUDA provider |
+| **FunASR** | Local speech recognition, GPU-accelerated via CUDA |
+| **Ollama LLM / VLLM** | Local LLM and vision model via a separate Ollama container (GPU) |
 
 ---
 
@@ -34,17 +36,17 @@ The container uses **`--network host`**, sharing the Jetson's network stack dire
 
 ---
 
-## Default Local Stack
+## Default AI Stack
 
-| Service | Provider | Notes |
-|---|---|---|
-| VAD | Silero VAD | Bundled; runs on CPU |
-| ASR | FunASR SenseVoiceSmall | Bundled model; runs on CPU |
-| LLM | Ollama `gemma3:12b` | Via `localhost:11434` |
-| VLLM | Ollama `minicpm-v` | Via `localhost:11434` |
-| TTS | Piper TTS | CPU-only; model file downloaded separately |
-| Memory | `mem_local_short` | LLM-based summarisation, no external service |
-| Intent | `function_call` | Fast; requires function-call support in the LLM |
+| Service | Provider | Device | Notes |
+|---|---|---|---|
+| VAD | Silero VAD | CPU | Tiny ONNX model; CPU is faster than GPU for this workload |
+| ASR | FunASR SenseVoiceSmall | **GPU** | Model loaded from `/data/models` on the host |
+| LLM | Ollama `gemma3:12b` | **GPU** | Via Ollama container at `localhost:11434` |
+| VLLM | Ollama `minicpm-v` | **GPU** | Via Ollama container at `localhost:11434` |
+| TTS | Piper TTS | **GPU** | ONNX model loaded from `/data/models` on the host |
+| Memory | `mem_local_short` | — | LLM-based summarisation, no external service |
+| Intent | `function_call` | — | Requires function-call support in the LLM |
 
 All providers can be switched to cloud alternatives through the web UI at any time
 without rebuilding the image.
@@ -55,33 +57,60 @@ without rebuilding the image.
 
 ### 1. Prerequisites
 
-- Docker installed on the Jetson
-- Ollama running and listening on `0.0.0.0:11434`
+- **JetPack 6.x** (R36) installed on the Jetson
+- **`default-runtime: nvidia`** set in `/etc/docker/daemon.json` (standard on JetPack 6)
+- **`dustynv/framepack`** image already pulled locally — this is the GPU base:
+  ```bash
+  # Confirm the image is present and note the exact tag
+  docker images | grep framepack
+  ```
+- **`/data/models`** directory on the Jetson with models already downloaded:
+  ```
+  /data/models/
+  ├── huggingface/iic/SenseVoiceSmall/   ← FunASR ASR model
+  └── piper/                              ← Piper TTS .onnx + .onnx.json files
+  ```
+  See [Downloading Models](#downloading-models) if either is missing.
+- **Ollama** running and listening on `0.0.0.0:11434`:
   ```bash
   ollama pull gemma3:12b
   ollama pull minicpm-v
   ```
 - Working directory for all build commands: `main/` (the parent of `custom-server/`)
 
-### 2. Build
+### 2. Set the base image tag
+
+Open `custom-server/docker-compose.yml` and update `BASE_IMAGE` to match the tag
+shown by `docker images | grep framepack`:
+
+```yaml
+args:
+  BASE_IMAGE: dustynv/framepack:r36.4.0   # ← change to your local tag
+```
+
+### 3. Build
 
 ```bash
 cd main/
-docker build -f custom-server/Dockerfile -t xiaozhi-custom-server .
+docker compose -f custom-server/docker-compose.yml build
 ```
 
 The build context is `main/` so the Dockerfile can access both `xiaozhi-server/` and
-`custom-server/` in a single pass.
-
-### 3. Create Persistent Volumes
-
-```bash
-docker volume create custom-data          # SQLite DB and secrets
-docker volume create custom-server-data   # xiaozhi-server runtime data
-docker volume create custom-models        # AI model files (FunASR, Piper, …)
-```
+`custom-server/` in a single pass. The first build takes 15–20 minutes; subsequent
+builds reuse the cache and are much faster.
 
 ### 4. Run
+
+```bash
+cd main/
+SERVER_HOST=192.168.1.100 docker compose -f custom-server/docker-compose.yml up -d
+```
+
+Set `SERVER_HOST` to your Jetson's LAN IP. This address is written into the WebSocket
+and OTA URLs that are sent to ESP32 devices — it does not affect how the container
+itself binds to ports.
+
+Or with plain Docker:
 
 ```bash
 docker run -d \
@@ -90,23 +119,13 @@ docker run -d \
   --network host \
   -v custom-data:/app/data \
   -v custom-server-data:/app/server/data \
-  -v custom-models:/app/server/models \
+  -v /data/models:/data/models:ro \
   -e SERVER_HOST=192.168.1.100 \
-  -e DATA_DIR=/app/data \
-  -e SERVER_DATA_DIR=/app/server/data \
   xiaozhi-custom-server
 ```
 
-Set `SERVER_HOST` to your Jetson's LAN IP. This address is written into the WebSocket
-and OTA URLs that are sent to ESP32 devices — it does not affect how the container
-itself binds to ports.
-
-#### Using Docker Compose instead
-
-```bash
-cd main/
-SERVER_HOST=192.168.1.100 docker compose -f custom-server/docker-compose.yml up -d
-```
+> **`--runtime nvidia`** is not required explicitly when `default-runtime` is already
+> `nvidia` in `/etc/docker/daemon.json`, which is the standard JetPack 6 configuration.
 
 ### 5. First-Run Setup
 
@@ -114,33 +133,11 @@ SERVER_HOST=192.168.1.100 docker compose -f custom-server/docker-compose.yml up 
 2. You will be redirected to the setup page — create your admin account.
 3. Default agents, model configs, and plugins are seeded automatically.
 
-### 6. Download the Piper TTS Model
+### 6. Verify model paths
 
-Piper model files must be placed in the `custom-models` volume before TTS will work.
-
-```bash
-MODELS_DIR=$(docker volume inspect custom-models --format '{{ .Mountpoint }}')/piper
-mkdir -p "$MODELS_DIR"
-
-# Default voice: English (US), Lessac, medium quality
-curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx" \
-     -o "$MODELS_DIR/en_US-lessac-medium.onnx"
-
-curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json" \
-     -o "$MODELS_DIR/en_US-lessac-medium.onnx.json"
-```
-
-Then restart the container:
-
-```bash
-# Plain Docker
-docker restart xiaozhi-custom
-
-# Docker Compose
-docker compose -f custom-server/docker-compose.yml restart
-```
-
-Browse all available voices and samples at: <https://rhasspy.github.io/piper-samples/>
+The seeded FunASR config points to `/data/models/huggingface/iic/SenseVoiceSmall`.
+If your SenseVoiceSmall model lives at a different path, update it via
+**Settings → Model Configurations → FunASR → Edit** in the web UI — no rebuild needed.
 
 ### 7. Connect Your ESP32
 
@@ -152,6 +149,39 @@ Flash your ESP32 with the xiaozhi firmware and configure:
 The first time an ESP32 connects with an unrecognised MAC address it is automatically
 registered and assigned to the default agent. Go to **Devices** in the web UI to give
 it a name or reassign it to a different agent.
+
+---
+
+## Downloading Models
+
+Models are stored on the Jetson host at `/data/models` and bind-mounted read-only into
+the container. The container never writes to this directory.
+
+### FunASR SenseVoiceSmall
+
+```bash
+pip install -q huggingface-hub
+huggingface-cli download iic/SenseVoiceSmall \
+  --local-dir /data/models/huggingface/iic/SenseVoiceSmall \
+  --local-dir-use-symlinks False
+```
+
+The directory must contain at minimum: `model.pt`, `config.yaml`, `tokens.json`.
+
+### Piper TTS voices
+
+```bash
+mkdir -p /data/models/piper
+
+# Default voice: English (US), Lessac, medium quality
+curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx" \
+     -o /data/models/piper/en_US-lessac-medium.onnx
+
+curl -L "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json" \
+     -o /data/models/piper/en_US-lessac-medium.onnx.json
+```
+
+Browse all available voices and samples at: <https://rhasspy.github.io/piper-samples/>
 
 ---
 
@@ -169,16 +199,16 @@ it a name or reassign it to a different agent.
 
 ## Adding Another Piper Voice
 
-1. Download the `.onnx` and `.onnx.json` files from the Piper voices repo into
-   `$MODELS_DIR` (see above).
+1. Download the `.onnx` and `.onnx.json` files to `/data/models/piper/` on the host.
 2. Open **Settings → Add Model** and create a new TTS entry:
 
 ```json
 {
   "type": "piper_tts",
   "voice_model": "en_GB-alba-medium",
-  "model_dir": "models/piper/",
+  "model_dir": "/data/models/piper/",
   "output_dir": "tmp/",
+  "use_cuda": true,
   "length_scale": 1.0
 }
 ```
@@ -248,12 +278,11 @@ docker logs -f xiaozhi-custom
 ```bash
 cd main/
 git pull
-docker build --no-cache -f custom-server/Dockerfile -t xiaozhi-custom-server .
-docker stop xiaozhi-custom && docker rm xiaozhi-custom
-# Re-run the docker run command from step 4
+docker compose -f custom-server/docker-compose.yml build --no-cache
+docker compose -f custom-server/docker-compose.yml up -d
 ```
 
-Volumes are preserved across container recreations — no data is lost.
+The SQLite database and model bind-mount are unaffected — no data is lost.
 
 ---
 
@@ -271,33 +300,26 @@ without physical hardware.
 
 ### Step 1 — Start the server
 
-The server must be running before you open the test page. Pick whichever method applies:
+The server must be running before you open the test page:
 
 ```bash
-# Docker (from main/)
+cd main/
 SERVER_HOST=192.168.1.100 docker compose -f custom-server/docker-compose.yml up -d
-
-# Bare Python (dev mode, from main/)
-python xiaozhi-server/app.py &          # WebSocket :8000 + HTTP :8003
-python custom-server/web/app.py &       # Flask UI :5001
 ```
 
 Verify both services are up:
 
 ```bash
-# Flask UI should return the login page
+# Flask UI should return 200
 curl -s -o /dev/null -w "%{http_code}" http://localhost:5001/
 
-# WebSocket server should accept a raw connection and send a text message
+# WebSocket server should respond with 101 Switching Protocols
 curl -s --include --no-buffer \
-  -H "Upgrade: websocket" \
-  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" -H "Connection: Upgrade" \
   -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
   -H "Sec-WebSocket-Version: 13" \
   http://localhost:8000/xiaozhi/v1/
 ```
-
-Expected: Flask returns `200`, the WebSocket curl shows a `101 Switching Protocols` response.
 
 ---
 
@@ -314,11 +336,9 @@ Open **http://localhost:8080/test.html** in Chrome or Edge.
 
 ### Step 3 — Connect
 
-1. Set **WebSocket Server URL** to `ws://<SERVER_IP>:8000/xiaozhi/v1/`
-   (use `localhost` if the server is on the same machine).
-2. Leave **Device ID** as the auto-generated value — it persists across reloads in
-   `localStorage` so the server always sees the same device.
-3. Leave **Auth token** empty (auth is disabled by default).
+1. Set **WebSocket Server URL** to `ws://<SERVER_IP>:8000/xiaozhi/v1/`.
+2. Leave **Device ID** as the auto-generated value — stored in `localStorage`.
+3. Leave **Auth token** empty (disabled by default).
 4. Click **Connect**.
 
 **Expected log output:**
@@ -328,15 +348,10 @@ Open **http://localhost:8080/test.html** in Chrome or Edge.
 ← recv  hello — session_id: a3f8c1d2…
 ```
 
-The status dot turns green and the session ID appears. The device is automatically
-registered in the Flask database on first connection — check **Devices** in the web UI
-at `http://<SERVER_IP>:5001/devices`.
-
 **If the connection fails:**
-- `WebSocket error` — server is not running or the address/port is wrong.
+- `WebSocket error` — server not running or wrong address/port.
 - `Connection closed (code 1008)` — auth is enabled; add a token.
-- `Connection closed (code 1000)` immediately after open — `device-id` was rejected
-  (check server logs: `docker exec xiaozhi-custom tail -f /var/log/supervisor/server.log`).
+- `Connection closed (code 1000)` immediately — check `docker exec xiaozhi-custom tail -f /var/log/supervisor/server.log`.
 
 ---
 
@@ -344,8 +359,8 @@ at `http://<SERVER_IP>:5001/devices`.
 
 Type a message in the input field and press **Enter** or click **Send**.
 
-This sends `{"type":"listen","state":"detect","text":"your message"}`, which bypasses
-audio encoding entirely and feeds the text directly to the LLM pipeline.
+This sends `{"type":"listen","state":"detect","text":"..."}`, bypassing audio encoding
+and feeding text directly to the LLM pipeline.
 
 **Expected log sequence:**
 
@@ -359,17 +374,14 @@ audio encoding entirely and feeds the text directly to the LLM pipeline.
 ← recv  tts stop
 ```
 
-The LLM response text appears next to `tts sentence_start`. Audio plays through the
-browser speakers as the frames arrive.
-
-**If no STT/TTS messages appear:**
-- Check the xiaozhi-server log for Python errors.
-- Check that Ollama is running: `curl http://localhost:11434/api/tags`
-- Check that the agent's LLM model config points to the correct Ollama model.
+**If no response appears:**
+- Check Ollama is running: `curl http://localhost:11434/api/tags`
+- Check xiaozhi-server logs: `docker exec xiaozhi-custom tail -f /var/log/supervisor/server.log`
 
 **If you see STT but no audio frames:**
-- Piper TTS model files may be missing — follow [Step 6 in Quick Start](#6-download-the-piper-tts-model).
-- Or the TTS provider is misconfigured — check **Settings → Model Configurations** in the web UI.
+- Check that Piper model files exist at `/data/models/piper/en_US-lessac-medium.onnx`.
+- Check the server log for onnxruntime CUDA errors — if `CUDAExecutionProvider` is
+  unavailable the provider falls back to CPU automatically; synthesis should still work.
 
 ---
 
@@ -378,18 +390,18 @@ browser speakers as the frames arrive.
 Audio plays automatically when Opus frames arrive (Chrome/Edge only). If you hear
 nothing despite seeing `🔊 Opus frame` lines in the log:
 
-- Check browser audio: make sure the tab is not muted and your system volume is up.
-- Click **Abort TTS** then send another message — this resets the audio decoder.
+- Check browser audio: tab not muted, system volume up.
+- Click **Abort TTS** then send another message to reset the audio decoder.
 - Open the browser console (`F12`) and look for `AudioDecoder` errors.
 
 ---
 
 ### Step 6 — Test microphone input / ASR (Chrome/Edge only)
 
-This tests the full speech path: mic → Opus encode → server VAD → ASR → LLM → TTS.
+This tests the full speech path: mic → Opus encode → server VAD → FunASR (GPU) → LLM → Piper TTS (GPU).
 
 1. Click **🎤 Record**.
-2. Allow microphone access when the browser prompts.
+2. Allow microphone access when prompted.
 3. Speak a sentence clearly.
 4. Click **⏹ Stop Recording**.
 
@@ -407,105 +419,56 @@ This tests the full speech path: mic → Opus encode → server VAD → ASR → 
 ← recv  tts stop
 ```
 
-**If `🗣 STT` text is empty or missing:**
-- FunASR model may not have downloaded yet (first-run download can take several minutes —
-  check `docker logs xiaozhi-custom`).
-- Speak more clearly or increase microphone input level.
-- Confirm VAD is configured as `silero` in the agent's settings.
+**If `🗣 STT` is empty or missing:**
+- FunASR takes 30–60 s to load on first start — check `docker logs xiaozhi-custom`.
+- Verify the model path: `ls /data/models/huggingface/iic/SenseVoiceSmall/model.pt`
+- Check GPU is being used: `docker exec xiaozhi-custom nvidia-smi`
 
 ---
 
 ### Step 7 — Test Abort
 
-While TTS audio is playing:
-
-1. Click **✕ Abort TTS**.
+While TTS audio is playing, click **✕ Abort TTS**.
 
 **Expected:**
-
 ```
 → sent  {"type":"abort"}
 ← recv  tts stop
 ```
 
-Playback stops immediately. The **Playing…** badge disappears.
-
 ---
 
-### Quick reference — what each log color means
+### Quick reference — log colours
 
-| Color | Direction | Meaning |
+| Colour | Direction | Meaning |
 |---|---|---|
 | Blue `→ sent` | Outbound | JSON message sent to server |
 | Green `← recv` | Inbound JSON | Server response (hello, stt, tts state) |
 | Gray `← recv` | Inbound binary | Opus audio frame from TTS |
-| Yellow `ℹ info` | Local | Page-level status (connect, record start/stop) |
+| Yellow `ℹ info` | Local | Page-level status |
 | Red `✖ error` | Local | Connection or codec error |
 
 ---
 
-## Building, Uploading, and Deploying the Image
+## Building and Distributing the Image
 
-Use this workflow when you want to build the image once (e.g. on a dev machine or CI)
-and deploy the pre-built image to the Jetson without re-building there.
+Because the base image (`dustynv/framepack`) is Jetson-specific (ARM64 + L4T), the
+image **must be built on the Jetson** (or another ARM64 machine). Cross-compilation from
+x86 is not supported.
 
-### Option A — Build directly on the Jetson (simplest)
-
-If you can clone the repo on the Jetson itself, just build natively:
-
-```bash
-git clone <repo-url>
-cd xiaozhi-esp32-server/main/
-docker build -f custom-server/Dockerfile -t xiaozhi-custom-server .
-```
-
-Skip to the [Run on Jetson](#run-on-the-jetson) section below.
-
----
-
-### Option B — Cross-build on x86, push to a registry, pull on Jetson
-
-#### 1. Enable multi-platform builds (one-time setup on your build machine)
+### Build on the Jetson and push to a registry
 
 ```bash
-docker buildx create --name multibuilder --use
-docker buildx inspect --bootstrap
-```
-
-#### 2. Build and push for ARM64
-
-Replace `yourdockerhubuser` with your Docker Hub username (or use `ghcr.io/<github-user>`
-for GitHub Container Registry).
-
-```bash
+# On the Jetson
 cd main/
+docker compose -f custom-server/docker-compose.yml build
 
-docker buildx build \
-  --platform linux/arm64 \
-  -f custom-server/Dockerfile \
-  -t yourdockerhubuser/xiaozhi-custom-server:latest \
-  --push \
-  .
+# Tag and push
+docker tag xiaozhi-custom-server:latest yourdockerhubuser/xiaozhi-custom-server:latest
+docker push yourdockerhubuser/xiaozhi-custom-server:latest
 ```
 
-The `--push` flag builds and uploads in one step. Omit it and add `--load` if you only
-want the image locally (x86 only, not arm64 with `--load`).
-
-**Tag with a version** instead of always overwriting `latest`:
-
-```bash
-docker buildx build \
-  --platform linux/arm64 \
-  -f custom-server/Dockerfile \
-  -t yourdockerhubuser/xiaozhi-custom-server:1.0.0 \
-  -t yourdockerhubuser/xiaozhi-custom-server:latest \
-  --push \
-  .
-```
-
-#### 3. Pull and run on the Jetson
-
-SSH into the Jetson, then:
+### Pull and run on another Jetson
 
 ```bash
 docker pull yourdockerhubuser/xiaozhi-custom-server:latest
@@ -516,92 +479,26 @@ docker run -d \
   --network host \
   -v custom-data:/app/data \
   -v custom-server-data:/app/server/data \
-  -v custom-models:/app/server/models \
-  -e SERVER_HOST=<JETSON_LAN_IP> \
-  -e DATA_DIR=/app/data \
-  -e SERVER_DATA_DIR=/app/server/data \
+  -v /data/models:/data/models:ro \
+  -e SERVER_HOST=$(hostname -I | awk '{print $1}') \
   yourdockerhubuser/xiaozhi-custom-server:latest
 ```
 
----
-
-### Option C — Transfer via file (no registry required)
-
-Useful for air-gapped environments or one-off transfers.
-
-**On the build machine:**
+### Transfer via file (no registry)
 
 ```bash
-cd main/
+# On the source Jetson
+docker save xiaozhi-custom-server:latest | gzip > xiaozhi-custom-server.tar.gz
+scp xiaozhi-custom-server.tar.gz user@<TARGET_JETSON_IP>:~
 
-# Build for ARM64 and export to a tar file
-docker buildx build \
-  --platform linux/arm64 \
-  -f custom-server/Dockerfile \
-  -o type=docker,dest=xiaozhi-custom-server.tar \
-  .
-
-# Compress (the uncompressed image can be 3–5 GB)
-gzip xiaozhi-custom-server.tar
-
-# Copy to the Jetson
-scp xiaozhi-custom-server.tar.gz user@<JETSON_IP>:~
-```
-
-**On the Jetson:**
-
-```bash
-# Load the image
+# On the target Jetson
 docker load < xiaozhi-custom-server.tar.gz
-
-# Verify it is present
-docker images xiaozhi-custom-server
-
-# Run it
-docker run -d \
-  --name xiaozhi-custom \
-  --restart unless-stopped \
-  --network host \
-  -v custom-data:/app/data \
-  -v custom-server-data:/app/server/data \
-  -v custom-models:/app/server/models \
-  -e SERVER_HOST=<JETSON_LAN_IP> \
-  -e DATA_DIR=/app/data \
-  -e SERVER_DATA_DIR=/app/server/data \
-  xiaozhi-custom-server
-```
-
----
-
-### Run on the Jetson
-
-After `docker pull` or `docker load`, create the persistent volumes (first time only)
-and start the container:
-
-```bash
-# Create volumes (skip if already created)
-docker volume create custom-data
-docker volume create custom-server-data
-docker volume create custom-models
-
-# Start
-docker run -d \
-  --name xiaozhi-custom \
-  --restart unless-stopped \
-  --network host \
-  -v custom-data:/app/data \
-  -v custom-server-data:/app/server/data \
-  -v custom-models:/app/server/models \
+docker run -d --name xiaozhi-custom --restart unless-stopped --network host \
+  -v custom-data:/app/data -v custom-server-data:/app/server/data \
+  -v /data/models:/data/models:ro \
   -e SERVER_HOST=$(hostname -I | awk '{print $1}') \
-  -e DATA_DIR=/app/data \
-  -e SERVER_DATA_DIR=/app/server/data \
-  xiaozhi-custom-server   # or yourdockerhubuser/xiaozhi-custom-server:latest
+  xiaozhi-custom-server:latest
 ```
-
-`$(hostname -I | awk '{print $1}')` auto-detects the Jetson's primary LAN IP.
-Replace with a fixed IP if your network has multiple interfaces.
-
-Then follow steps 5–7 of [Quick Start](#quick-start) (setup page, Piper model, ESP32 config).
 
 ---
 
@@ -609,30 +506,41 @@ Then follow steps 5–7 of [Quick Start](#quick-start) (setup page, Piper model,
 
 ```
 main/
-├── xiaozhi-server/               ← Upstream Python AI engine (not modified)
+├── xiaozhi-server/                    ← Upstream Python AI engine (not modified)
 └── custom-server/
-    ├── server_overrides/         ← Files overlaid on top of xiaozhi-server at build time
+    ├── server_overrides/              ← Overlaid on top of xiaozhi-server at build time
     │   └── core/providers/
-    │       ├── tts/piper_tts.py  ← New: offline Piper TTS provider
-    │       └── vllm/ollama_vllm.py ← New: Ollama vision model provider
-    ├── web/                      ← Flask configuration UI
-    │   ├── app.py                ← App factory; writes server/data/.config.yaml on startup
-    │   ├── models.py             ← SQLAlchemy models (User, Agent, Device, ModelConfig, …)
-    │   ├── seed.py               ← First-run data seeding
+    │       ├── asr/fun_local.py       ← Override: passes `device` from config to AutoModel
+    │       ├── vad/silero.py          ← Override: finds ONNX from silero_vad pip package
+    │       ├── tts/piper_tts.py       ← Override: GPU via onnxruntime CUDA provider
+    │       └── vllm/ollama_vllm.py    ← New: Ollama vision model provider
+    ├── web/                           ← Flask configuration UI
+    │   ├── app.py                     ← App factory; writes server/data/.config.yaml on startup
+    │   ├── models.py                  ← SQLAlchemy models (User, Agent, Device, ModelConfig, …)
+    │   ├── seed.py                    ← First-run data seeding
     │   └── routes/
-    │       ├── api.py            ← Internal REST API consumed by xiaozhi-server
-    │       ├── auth.py           ← Login / first-run setup
+    │       ├── api.py                 ← Internal REST API consumed by xiaozhi-server
+    │       ├── auth.py                ← Login / first-run setup
     │       ├── dashboard.py
     │       ├── agents.py
     │       ├── devices.py
     │       ├── plugins.py
     │       └── settings.py
-    ├── Dockerfile                ← Build context: main/
-    ├── docker-compose.yml        ← network_mode: host
-    ├── supervisord.conf          ← Runs Flask then xiaozhi-server
+    ├── Dockerfile                     ← Base: dustynv/framepack (Jetson GPU)
+    ├── docker-compose.yml             ← network_mode: host, /data/models bind-mount
+    ├── supervisord.conf               ← Runs Flask then xiaozhi-server
     ├── entrypoint.sh
+    ├── test.html                      ← Browser-based ESP32 emulator
     └── README.md
 ```
+
+### GPU provider overrides
+
+| Override | What it does |
+|---|---|
+| `asr/fun_local.py` | Reads `device` from the model config (`cpu` or `cuda:0`) and passes it to FunASR's `AutoModel`. The upstream file ignores this config key. |
+| `vad/silero.py` | Locates `silero_vad.onnx` from the `silero_vad` pip package bundled in `requirements.txt` — no manual model download needed. VAD stays on CPU (the model is too small to benefit from GPU). |
+| `tts/piper_tts.py` | Reads `use_cuda` from the model config. When `true`, passes `CUDAExecutionProvider` to onnxruntime. Falls back to CPU gracefully if the CUDA provider is unavailable. |
 
 ### How Flask and xiaozhi-server talk
 
@@ -648,4 +556,16 @@ ESP32  ──WebSocket──▶  xiaozhi-server (:8000)
                        Flask API (:5001)
                               │
                            SQLite
+```
+
+### Model storage
+
+All AI models live on the Jetson host at `/data/models` and are bind-mounted read-only
+into the container. No model files are baked into the Docker image.
+
+```
+/data/models/
+├── huggingface/iic/SenseVoiceSmall/   ← FunASR ASR  (device: cuda:0)
+├── piper/                              ← Piper TTS   (use_cuda: true)
+└── ...                                 ← Other models used by other containers
 ```

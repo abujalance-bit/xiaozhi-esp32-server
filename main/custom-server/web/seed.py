@@ -26,9 +26,12 @@ DEFAULT_MODEL_CONFIGS = [
         is_local=True,
         config_json={
             "type": "fun_local",
-            "model_dir": "models/SenseVoiceSmall",
+            # Model downloaded to /data/models on the Jetson host, bind-mounted read-only.
+            # Verify the exact path: ls /data/models/huggingface/iic/SenseVoiceSmall/
+            # If the model lives elsewhere update this via Settings in the web UI.
+            "model_dir": "/data/models/huggingface/iic/SenseVoiceSmall",
             "output_dir": "tmp/",
-            "device": "cpu",
+            "device": "cuda:0",
         },
     ),
     ModelConfig(
@@ -90,14 +93,16 @@ DEFAULT_MODEL_CONFIGS = [
     ModelConfig(
         id="PiperTTS",
         type="TTS",
-        name="Piper TTS (Local, Offline)",
-        description="Lightweight offline TTS using Piper. Works on ARM64 without GPU.",
+        name="Piper TTS (Local, GPU)",
+        description="Offline TTS using Piper with onnxruntime CUDA provider on Jetson.",
         is_local=True,
         config_json={
             "type": "piper_tts",
             "voice_model": "en_US-lessac-medium",
-            "model_dir": "models/piper/",
+            # Model files (.onnx + .onnx.json) at /data/models/piper/ on the host.
+            "model_dir": "/data/models/piper/",
             "output_dir": "tmp/",
+            "use_cuda": True,
             "length_scale": 1.0,
             "noise_scale": 0.667,
             "noise_w": 0.8,
