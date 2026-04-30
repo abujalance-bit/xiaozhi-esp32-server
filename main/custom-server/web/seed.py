@@ -21,13 +21,11 @@ DEFAULT_MODEL_CONFIGS = [
     ModelConfig(
         id="FunASR",
         type="ASR",
-        name="FunASR SenseVoice (Local)",
-        description="Local speech recognition using FunASR SenseVoiceSmall model.",
+        name="FunASR SenseVoice (Local, no Spanish)",
+        description="Local ASR using FunASR SenseVoiceSmall. Supports Chinese, English, Japanese, Korean — NOT Spanish.",
         is_local=True,
         config_json={
             "type": "fun_local",
-            # model_name: registered HuggingFace/ModelScope name (used for class lookup)
-            # model_dir:  local path to the model files (skips download if it exists)
             "model_name": "iic/SenseVoiceSmall",
             "model_dir": "/data/models/SenseVoiceSmall",
             "output_dir": "tmp/",
@@ -37,32 +35,30 @@ DEFAULT_MODEL_CONFIGS = [
     ModelConfig(
         id="FasterWhisper",
         type="ASR",
-        name="Faster Whisper (Local, GPU)",
-        description="Offline Whisper via CTranslate2 — multilingual (including Spanish), CUDA-accelerated. medium ~0.5 s on Jetson.",
+        name="Faster Whisper (Local, Spanish)",
+        description="Offline Whisper via CTranslate2 — full Spanish support. Runs on CPU+int8 on Jetson ARM64 (PyPI ctranslate2 has no ARM64 CUDA build).",
         is_local=True,
         config_json={
             "type": "faster_whisper_local",
-            # Auto-downloads on first run, or set to a local path.
-            # On Jetson ARM64 the PyPI ctranslate2 has no CUDA support;
-            # the provider falls back automatically to cpu+int8.
             "model_size_or_path": "medium",
             "device": "cpu",
             "compute_type": "int8",
-            "language": None,
+            "language": "es",
             "output_dir": "tmp/",
         },
     ),
     ModelConfig(
         id="GroqASR",
         type="ASR",
-        name="Groq Whisper (Cloud)",
-        description="Groq-hosted Whisper Large v3 Turbo — very fast, free tier, multilingual including Spanish.",
+        name="Groq Whisper (Cloud, Spanish)",
+        description="Groq-hosted Whisper Large v3 Turbo — very fast, free tier, excellent Spanish support.",
         is_local=False,
         config_json={
             "type": "openai",
             "api_key": "",
             "base_url": "https://api.groq.com/openai/v1/audio/transcriptions",
             "model_name": "whisper-large-v3-turbo",
+            "language": "es",
             "output_dir": "tmp/",
         },
     ),
@@ -125,16 +121,16 @@ DEFAULT_MODEL_CONFIGS = [
     ModelConfig(
         id="PiperTTS",
         type="TTS",
-        name="Piper TTS (Local, GPU)",
-        description="Offline TTS using Piper with onnxruntime CUDA provider on Jetson.",
+        name="Piper TTS (Local, GPU, Spanish)",
+        description="Offline Spanish TTS using Piper es_ES-davefx-medium with onnxruntime CUDA provider on Jetson.",
         is_local=True,
         config_json={
             "type": "piper_tts",
-            "voice_model": "en_US-lessac-medium",
-            # Model files (.onnx + .onnx.json) at /data/models/piper/ on the host.
+            "voice_model": "es_ES-davefx-medium",
             "model_dir": "/data/models/piper/",
             "output_dir": "tmp/",
             "use_cuda": True,
+            "language": "es",
             "length_scale": 1.0,
             "noise_scale": 0.667,
             "noise_w": 0.8,
@@ -143,12 +139,12 @@ DEFAULT_MODEL_CONFIGS = [
     ModelConfig(
         id="EdgeTTS",
         type="TTS",
-        name="Edge TTS (Online)",
-        description="Microsoft Edge TTS — free but requires internet access.",
+        name="Edge TTS (Online, Spanish)",
+        description="Microsoft Edge TTS Spanish — free but requires internet access.",
         is_local=False,
         config_json={
             "type": "edge",
-            "voice": "en-US-JennyNeural",
+            "voice": "es-ES-ElviraNeural",
             "output_dir": "tmp/",
         },
     ),
@@ -361,16 +357,17 @@ DEFAULT_SYS_PARAMS = [
     ),
     SysParam(
         key="wakeup_words",
-        value="Hey Xiaozhi;Hello Xiaozhi;Hey Assistant",
+        value="Oye asistente;Hola asistente;Hey asistente",
         value_type="array",
         description="Wake-up phrases (semicolon-separated).",
     ),
 ]
 
 DEFAULT_AGENT_PROMPT = (
-    "You are a helpful, friendly voice assistant running locally on a Jetson AGX Orin. "
-    "Keep your responses concise and conversational — you are speaking, not writing. "
-    "Avoid long lists or markdown formatting."
+    "Eres un asistente de voz amigable y útil que se ejecuta localmente en una Jetson AGX Orin. "
+    "Responde siempre en español. "
+    "Mantén tus respuestas breves y conversacionales — estás hablando, no escribiendo. "
+    "Evita listas largas y formato markdown."
 )
 
 
@@ -391,16 +388,16 @@ def seed_database():
     # Create the default agent if none exists
     if Agent.query.count() == 0:
         default_agent = Agent(
-            name="Default Assistant",
+            name="Asistente en Español",
             system_prompt=DEFAULT_AGENT_PROMPT,
             vad_model_id="SileroVAD",
-            asr_model_id="FunASR",
+            asr_model_id="FasterWhisper",
             llm_model_id="OllamaLLM",
             vllm_model_id="OllamaVLLM",
             tts_model_id="PiperTTS",
             mem_model_id="mem_local_short",
             intent_model_id="function_call",
-            tts_language="English",
+            tts_language="Spanish",
             is_default=True,
         )
         db.session.add(default_agent)

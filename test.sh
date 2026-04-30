@@ -25,10 +25,32 @@ pip install --no-cache-dir faster-whisper
 
 pip install --no-cache-dir -r "$MAIN_DIR/custom-server/web/requirements.txt" --ignore-installed
 
+# Replace CPU-only onnxruntime (installed as silero_vad/piper-tts dep) with the
+# Jetson CUDA build so Silero VAD and Piper TTS can use the GPU.
+pip uninstall -y onnxruntime onnxruntime-gpu 2>/dev/null || true
+pip install --no-cache-dir \
+    --extra-index-url https://pypi.jetson-ai-lab.dev \
+    onnxruntime-gpu
+
 cp -r "$MAIN_DIR/custom-server/server_overrides/." "$SERVER_DIR/"
 
 mkdir -p "$REPO_ROOT/data"
 mkdir -p "$SERVER_DIR/data"
+mkdir -p "$SERVER_DIR/tmp"
+
+# Download Piper TTS model if not already present
+PIPER_DIR="/data/models/piper"
+mkdir -p "$PIPER_DIR"
+PIPER_MODEL="es_ES-davefx-medium"
+PIPER_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/davefx/medium"
+if [ ! -f "$PIPER_DIR/$PIPER_MODEL.onnx" ]; then
+    echo "Downloading Piper TTS model (this may take a minute)..."
+    wget -q --show-progress -O "$PIPER_DIR/$PIPER_MODEL.onnx" "$PIPER_BASE/$PIPER_MODEL.onnx"
+fi
+if [ ! -f "$PIPER_DIR/$PIPER_MODEL.onnx.json" ]; then
+    echo "Downloading Piper TTS model config..."
+    wget -q -O "$PIPER_DIR/$PIPER_MODEL.onnx.json" "$PIPER_BASE/$PIPER_MODEL.onnx.json"
+fi
 
 export PYTHONUNBUFFERED=1
 export PYTHONDONTWRITEBYTECODE=1
@@ -43,6 +65,9 @@ fi
 export NVIDIA_VISIBLE_DEVICES=all
 export NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
+# Reset database so the Spanish defaults in seed.py take effect.
+# Remove this line after your agents are configured.
+rm -f "$DATA_DIR/custom_server.db"
 
 # Flask auto-starts xiaozhi-server 5 s after binding (see routes/server_control.py).
 # Use the web UI at http://localhost:5001/server/status to start/stop/restart it.
