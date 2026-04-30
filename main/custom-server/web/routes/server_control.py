@@ -27,7 +27,11 @@ from flask_login import login_required
 server_ctl = Blueprint("server_ctl", __name__, url_prefix="/server")
 
 DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
-SERVER_DATA_DIR = os.environ.get("SERVER_DATA_DIR", "/app/server/data")
+
+_ROUTES_DIR = os.path.dirname(os.path.abspath(__file__))
+SERVER_DATA_DIR = os.environ.get("SERVER_DATA_DIR") or os.path.normpath(
+    os.path.join(_ROUTES_DIR, "../../../xiaozhi-server/data")
+)
 SERVER_DIR = os.path.dirname(SERVER_DATA_DIR)
 PID_FILE = os.path.join(DATA_DIR, ".server.pid")
 

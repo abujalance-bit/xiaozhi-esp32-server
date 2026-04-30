@@ -1,12 +1,32 @@
 import os
 import secrets
+import socket
 from flask import Flask, redirect, url_for
 from flask_login import LoginManager
 from models import db, User
 from seed import seed_database
 
 DATA_DIR = os.environ.get("DATA_DIR", "/app/data")
-SERVER_DATA_DIR = os.environ.get("SERVER_DATA_DIR", "/app/server/data")
+
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SERVER_DATA_DIR = os.environ.get("SERVER_DATA_DIR") or os.path.normpath(
+    os.path.join(_SCRIPT_DIR, "../../xiaozhi-server/data")
+)
+
+
+def _get_lan_ip() -> str:
+    """Return LAN IP; reads SERVER_HOST env var first, then auto-detects."""
+    host = os.environ.get("SERVER_HOST")
+    if host and host not in ("localhost", "127.0.0.1"):
+        return host
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
 
 
 def create_app():
@@ -38,6 +58,7 @@ def create_app():
     from routes.plugins import plugins_bp
     from routes.settings import settings_bp
     from routes.api import api_bp
+    from routes.ota import ota_bp
     from routes.server_control import server_ctl, autostart_server_background
 
     app.register_blueprint(auth_bp)
@@ -47,6 +68,7 @@ def create_app():
     app.register_blueprint(plugins_bp, url_prefix="/plugins")
     app.register_blueprint(settings_bp, url_prefix="/settings")
     app.register_blueprint(api_bp)        # /config/* and /agent/* — no prefix
+    app.register_blueprint(ota_bp)        # /xiaozhi/ota/* — no prefix
     app.register_blueprint(server_ctl)    # /server/*
 
     @app.route("/")
@@ -55,7 +77,7 @@ def create_app():
 
     # Start the xiaozhi-server in a background thread 5 s after Flask binds,
     # so Flask is already serving when the server makes its first manager-api call.
-    #autostart_server_background()
+    autostart_server_background()
 
     return app
 
@@ -90,7 +112,7 @@ def _write_server_config():
 
     api_secret = _get_or_create_api_secret()
     flask_port = int(os.environ.get("FLASK_PORT", 5001))
-    ws_host = os.environ.get("SERVER_HOST", "YOUR_HOST_IP")
+    ws_host = _get_lan_ip()
     ws_port = int(os.environ.get("WS_PORT", 8000))
     http_port = int(os.environ.get("HTTP_PORT", 8003))
 

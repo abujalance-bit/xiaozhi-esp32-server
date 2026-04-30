@@ -343,7 +343,7 @@ Memory:
 ASR:
   FunASR:
     type: fun_local
-    model_dir: models/SenseVoiceSmall
+    model_dir: /data/models/SenseVoiceSmall
     output_dir: tmp/
   FunASRServer:
     # 独立部署FunASR，使用FunASR的API服务，只需要五句话

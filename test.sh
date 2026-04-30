@@ -37,7 +37,9 @@ export SERVER_DATA_DIR="$SERVER_DIR/data"
 export FLASK_PORT=5001
 export WS_PORT=8000
 export HTTP_PORT=8003
-export SERVER_HOST="${SERVER_HOST:-localhost}"
+if [ -z "$SERVER_HOST" ] || [ "$SERVER_HOST" = "localhost" ]; then
+    export SERVER_HOST=$(hostname -I | awk '{print $1}' 2>/dev/null || echo "127.0.0.1")
+fi
 export NVIDIA_VISIBLE_DEVICES=all
 export NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
