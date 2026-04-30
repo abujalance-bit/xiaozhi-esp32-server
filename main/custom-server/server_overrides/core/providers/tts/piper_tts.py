@@ -91,7 +91,9 @@ class TTSProvider(TTSProviderBase):
         audio_bytes = await loop.run_in_executor(None, self._synthesize, text)
 
         if output_file:
-            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+            parent = os.path.dirname(output_file)
+            if parent:
+                os.makedirs(parent, exist_ok=True)
             with wave.open(output_file, "wb") as wf:
                 wf.setnchannels(1)
                 wf.setsampwidth(2)
@@ -100,12 +102,20 @@ class TTSProvider(TTSProviderBase):
         return audio_bytes
 
     def _synthesize(self, text):
-        chunks = []
-        for audio_bytes in self._piper_voice.synthesize_stream_raw(
-            text,
-            length_scale=self.length_scale,
-            noise_scale=self.noise_scale,
-            noise_w=self.noise_w,
-        ):
-            chunks.append(audio_bytes)
-        return b"".join(chunks)
+        """Return raw PCM bytes (16-bit signed, mono) via the stable synthesize() API."""
+        import io
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(self._sample_rate)
+            self._piper_voice.synthesize(
+                text,
+                wf,
+                length_scale=self.length_scale,
+                noise_scale=self.noise_scale,
+                noise_w=self.noise_w,
+            )
+        buf.seek(0)
+        with wave.open(buf, "rb") as wf:
+            return wf.readframes(wf.getnframes())
