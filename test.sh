@@ -28,8 +28,8 @@ pip install --no-cache-dir -r "$MAIN_DIR/custom-server/web/requirements.txt" --i
 # Replace CPU-only onnxruntime (installed as silero_vad/piper-tts dep) with the
 # Jetson CUDA build so Silero VAD and Piper TTS can use the GPU.
 pip uninstall -y onnxruntime onnxruntime-gpu 2>/dev/null || true
+pip install onnxruntime
 pip install --no-cache-dir \
-    --extra-index-url https://pypi.jetson-ai-lab.dev \
     onnxruntime-gpu
 
 cp -r "$MAIN_DIR/custom-server/server_overrides/." "$SERVER_DIR/"
@@ -67,7 +67,7 @@ export NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
 # Reset database so the Spanish defaults in seed.py take effect.
 # Remove this line after your agents are configured.
-rm -f "$DATA_DIR/custom_server.db"
+# rm -f "$DATA_DIR/custom_server.db"
 
 # Flask auto-starts xiaozhi-server 5 s after binding (see routes/server_control.py).
 # Use the web UI at http://localhost:5001/server/status to start/stop/restart it.
