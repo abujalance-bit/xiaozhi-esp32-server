@@ -59,13 +59,13 @@ class ASRProvider(ASRProviderBase):
 
             if result and result["err_no"] == 0:
                 logger.bind(tag=TAG).debug(
-                    f"百度语音识别耗时: {time.time() - start_time:.3f}s | 结果: {result}"
+                    f"百度 Voice generation successful : {time.time() - start_time:.3f}s | 结果: {result}"
                 )
                 result = result["result"][0]
                 return result, artifacts.file_path
             else:
                 raise Exception(
-                    f"百度语音识别失败，错误码: {result['err_no']}，错误信息: {result['err_msg']}"
+                    f"百度Speech recognition failed，错误码: {result['err_no']}，错误信息: {result['err_msg']}"
                 )
                 return None, artifacts.file_path
 

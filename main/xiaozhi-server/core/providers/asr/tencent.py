@@ -63,7 +63,7 @@ class ASRProvider(ASRProviderBase):
 
             if result:
                 logger.bind(tag=TAG).debug(
-                    f"腾讯云语音识别耗时: {time.time() - start_time:.3f}s | 结果: {result}"
+                    f"腾讯云 Voice generation successful : {time.time() - start_time:.3f}s | 结果: {result}"
                 )
 
             return result, artifacts.file_path

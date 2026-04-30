@@ -311,7 +311,7 @@ class ASRProviderBase(ABC):
             logger.bind(tag=TAG).error(f"文件操作错误: {e}")
             return None, None
         except Exception as e:
-            logger.bind(tag=TAG).error(f"语音识别失败: {e}")
+            logger.bind(tag=TAG).error(f"Speech recognition failed: {e}")
             return None, None
         finally:
             try:

@@ -81,11 +81,11 @@ class ASRProvider(ASRProviderBase):
                 text_result += final_text
             
             logger.bind(tag=TAG).debug(
-                f"VOSK语音识别耗时: {time.time() - start_time:.3f}s | 结果: {text_result.strip()}"
+                f"VOSK Voice generation successful : {time.time() - start_time:.3f}s | 结果: {text_result.strip()}"
             )
             
             return text_result.strip(), artifacts.file_path
             
         except Exception as e:
-            logger.bind(tag=TAG).error(f"VOSK语音识别失败: {e}")
+            logger.bind(tag=TAG).error(f"VOSKSpeech recognition failed: {e}")
             return "", None

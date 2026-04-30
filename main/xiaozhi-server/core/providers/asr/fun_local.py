@@ -86,7 +86,7 @@ class ASRProvider(ASRProviderBase):
                 )
                 text = lang_tag_filter(result[0]["text"])
                 logger.bind(tag=TAG).debug(
-                    f"语音识别耗时: {time.time() - start_time:.3f}s | 结果: {text['content']}"
+                    f" Voice generation successful : {time.time() - start_time:.3f}s | 结果: {text['content']}"
                 )
 
                 return text, artifacts.file_path
@@ -95,14 +95,14 @@ class ASRProvider(ASRProviderBase):
                 retry_count += 1
                 if retry_count >= MAX_RETRIES:
                     logger.bind(tag=TAG).error(
-                        f"语音识别失败（已重试{retry_count}次）: {e}", exc_info=True
+                        f"Speech recognition failed（已重试{retry_count}次）: {e}", exc_info=True
                     )
                     return "", None
                 logger.bind(tag=TAG).warning(
-                    f"语音识别失败，正在重试（{retry_count}/{MAX_RETRIES}）: {e}"
+                    f"Speech recognition failed，正在重试（{retry_count}/{MAX_RETRIES}）: {e}"
                 )
                 time.sleep(RETRY_DELAY)
 
             except Exception as e:
-                logger.bind(tag=TAG).error(f"语音识别失败: {e}", exc_info=True)
+                logger.bind(tag=TAG).error(f"Speech recognition failed: {e}", exc_info=True)
                 return "", None

@@ -250,11 +250,11 @@ class ASRProvider(ASRProviderBase):
             text = await self._send_request(artifacts.pcm_bytes, segment_size)
             if text:
                 logger.bind(tag=TAG).debug(
-                    f"语音识别耗时: {time.time() - start_time:.3f}s | 结果: {text}"
+                    f" Voice generation successful : {time.time() - start_time:.3f}s | 结果: {text}"
                 )
                 return text, artifacts.file_path
             return "", artifacts.file_path
 
         except Exception as e:
-            logger.bind(tag=TAG).error(f"语音识别失败: {e}", exc_info=True)
+            logger.bind(tag=TAG).error(f"Speech recognition failed: {e}", exc_info=True)
             return "", None

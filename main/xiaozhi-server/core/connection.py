@@ -232,13 +232,13 @@ class ConnectionHandler:
             try:
                 await self._save_and_close(ws)
             except Exception as final_error:
-                self.logger.bind(tag=TAG).error(f"最终清理时出错: {final_error}")
+                self.logger.bind(tag=TAG).error(f"Failed to save memory: {final_error}")
                 # 确保即使保存记忆失败，也要关闭连接
                 try:
                     await self.close(ws)
                 except Exception as close_error:
                     self.logger.bind(tag=TAG).error(
-                        f"强制关闭连接时出错: {close_error}"
+                        f"Error occurred while forcibly closing the connection: {close_error}"
                     )
 
     async def _save_and_close(self, ws):

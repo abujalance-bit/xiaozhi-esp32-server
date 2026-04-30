@@ -140,7 +140,7 @@ class WebSocketServer:
                     await websocket.close()
             except Exception as close_error:
                 self.logger.bind(tag=TAG).error(
-                    f"服务器端强制关闭连接时出错: {close_error}"
+                    f"服务器端Error occurred while forcibly closing the connection: {close_error}"
                 )
 
     async def _http_response(self, websocket, request_headers):

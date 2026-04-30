@@ -232,5 +232,5 @@ class ASRProvider(ASRProviderBase):
             return "", artifacts.file_path
 
         except Exception as e:
-            logger.bind(tag=TAG).error(f"语音识别失败: {e}", exc_info=True)
+            logger.bind(tag=TAG).error(f"Speech recognition failed: {e}", exc_info=True)
             return "", None

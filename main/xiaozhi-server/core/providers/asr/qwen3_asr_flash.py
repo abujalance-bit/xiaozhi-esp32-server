@@ -107,5 +107,5 @@ class ASRProvider(ASRProviderBase):
             return full_text, file_path
                 
         except Exception as e:
-            logger.bind(tag=tag).error(f"语音识别失败: {e}")
+            logger.bind(tag=tag).error(f"Speech recognition failed: {e}")
             return "", file_path
