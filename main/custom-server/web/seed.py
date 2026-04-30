@@ -179,8 +179,7 @@ DEFAULT_MODEL_CONFIGS = [
         is_local=True,
         config_json={
             "type": "mem_local_short",
-            # Leave llm blank to use the same LLM as the agent (OllamaLLM).
-            # Set to another model ID to use a dedicated summarisation model.
+            "llm": "",  # empty = use the agent's own LLM; set to a ModelConfig id for a dedicated summarizer
         },
     ),
     ModelConfig(
